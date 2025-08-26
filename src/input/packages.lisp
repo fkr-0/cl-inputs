@@ -1,6 +1,11 @@
+(uiop:define-package :cl-inputs.util
+  (:use :cl :alexandria)
+  (:export #:as-utf-8-bytes
+           #:string-to-utf-8-bytes))
+
 (uiop:define-package :cl-inputs.tokens
   (:use :cl :alexandria)
-  (:export #:input-token #:make-token #:token-kind #:input-token-data #:token-ts
+  (:export #:input-token #:make-token #:input-token-kind #:input-token-data #:input-token-ts
            ;; common :kind values
            #:+k-key+ #:+k-mouse+ #:+k-resize+ #:+k-paste+ #:+k-focus+))
 
@@ -18,9 +23,20 @@
 
 (uiop:define-package :cl-inputs.device
   (:use :cl :alexandria)
+  (:import-from
+   #:cl-inputs.util #:as-utf-8-bytes #:string-to-utf-8-bytes)
   (:import-from #:sb-posix #:o-rdwr
                 #:tcgetattr #:tcsetattr #:termios #:termios-lflag #:termios-cc
                 #:icanon #:echo #:vmin #:vtime #:tcsanow #:tcsaflush)
+  (:import-from #:sb-posix
+                #:tcgetattr #:tcsetattr #:termios #:termios-lflag #:termios-cc
+                #:icanon #:echo #:vmin #:vtime #:tcsanow #:tcsaflush
+                #:fcntl #:f-setfd) ; Removed o_nonblock and f_getfd, will use sb-posix::
+  (:import-from #:sb-unix
+                #:unix-open #:unix-close #:unix-read #:unix-write #:o_rdwr #:o_noctty)
+  (:import-from #:sb-ext #:run-program  #:process-pid #:process-pty #:process-kill)
+  (:import-from #:sb-sys #:make-fd-stream #:fd-stream-fd)
+
   (:export
    ;; Device port (generics; default stub prints warnings)
    #:make-device

@@ -7,14 +7,14 @@
     ((functionp sink) (funcall sink token))
     (t
      (accept-token sink token)
-     (ecase (cl-inputs.tokens:token-kind token)
+     (ecase (cl-inputs.tokens:input-token-kind token)
        (:key    (on-key sink token))
        (:mouse  (on-mouse sink token))
        (:resize (on-resize sink token))
        (:paste  (on-paste sink token))
        (:focus  (on-focus sink token))))))
 
-(defun start-input-loop (&key (device (cl-inputs.device:open-device))
+(defun start-input-loop (&key (device (cl-inputs.device:make-device* :tty))
                            (sink (fn-sink (lambda (_tok) (declare (ignore _tok)) nil)))
                            (decoder (cl-inputs.decoder:make-decoder)))
   "Reads from DEVICE, decodes via DECODER, pushes to SINK. Returns an INPUT-LOOP handle."
@@ -53,15 +53,19 @@
   "A source of input tokens, typically from a device."
   dev decoder buf)
 
-(defun make-input-source (&key (device (cl-inputs.device:open-device))
+(defun make-input-source (&key (device (cl-inputs.device:make-device* :tty))
                             (decoder (cl-inputs.decoder:make-decoder)))
+
   (cl-inputs.device:enable-raw-mode device)
   (%make-input-source :dev device :decoder decoder :buf (make-array 4096 :element-type '(unsigned-byte 8))))
 
 (defun next-token (src &key (timeout nil))
   "Blocking read (or timed if DEVICE supports it). Returns a token or NIL on EOF."
   (declare (ignore timeout)) ; extend in your device impl
-  (let* ((n (cl-inputs.device:device-read-bytes (input-source-dev src) (input-source-buf src) 0 4096)))
+  (let* ((n
+           (cl-inputs.device:device-read-bytes
+            (input-source-dev src)
+            (input-source-buf src) 0 4096)))
     (cond
       ((or (eql n :eof) (null n) (zerop n)) nil)
       (t

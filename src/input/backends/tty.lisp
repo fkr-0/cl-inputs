@@ -1,6 +1,7 @@
 (in-package :cl-inputs.device)
 
-(defstruct tty-device
+
+(defstruct (tty-device (:constructor %make-tty-device))
   path
   in
   out
@@ -56,10 +57,8 @@
    (message :initarg :message :reader tty-device-error-message)))
 
 (defmethod enable-raw-mode ((dev tty-device))
-  (let ((fd (sb-sys:fd-stream-fd (tty-device-in dev)))
-        (tos (multiple-value-bind (a rest)
-                 (%termios-raw-mode fd t)
-               a)))
+  (let* ((fd (sb-sys:fd-stream-fd (tty-device-in dev)))
+         (tos (%termios-raw-mode fd t)))
     (unless tos
       (error 'termios-raw-mode-error
              :device dev
@@ -87,13 +86,13 @@
 (defmethod device-set-modes ((dev tty-device) modes)
   (let ((stream (tty-device-out dev)))
     (when (getf modes :mouse)
-      (write-sequence (trivial-utf-8:string-to-utf-8-bytes
+      (write-sequence (string-to-utf-8-bytes
                        (if (eq (getf modes :mouse) :sgr)
                            "[?1006h[?1003h" ; SGR + any
                            "[?9h")) ; X10
                       stream))
     (when (getf modes :paste)
-      (write-sequence (trivial-utf-8:string-to-utf-8-bytes "[?2004h") stream))
+      (write-sequence (string-to-utf-8-bytes "[?2004h") stream))
     (when (getf modes :focus)
-      (write-sequence (trivial-utf-8:string-to-utf-8-bytes "[?1004h") stream))
+      (write-sequence (string-to-utf-8-bytes "[?1004h") stream))
     (finish-output stream)))

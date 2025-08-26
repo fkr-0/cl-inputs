@@ -2,7 +2,8 @@
 
 (defparameter *default-keymap*
   ;; minimal examples; extend with your full table
-  `((,(mapcar #'char-code '(#\Esc #\[ #\A)) :up)
+  `(((mapcar #'char-code '(#\Esc #\[ #\A)) :up)
+    (,(mapcar #'char-code '(#\Esc #\[ #\A)) :up)
     (,(mapcar #'char-code '(#\Esc #\[ #\B)) :down)
     (,(mapcar #'char-code '(#\Esc #\[ #\C)) :right)
     (,(mapcar #'char-code '(#\Esc #\[ #\D)) :left)
@@ -30,6 +31,7 @@
     (,(mapcar #'char-code '(#\Esc #\[ #\2 #\4 #\~)) :f12)))
 
 (defun lookup-seq (octets &optional (table *default-keymap*))
+  (format t "Looking up sequence: ~A~%" octets)
   (let ((match (find (coerce octets 'list) table
                      :key #'first
                      :test #'equal)))

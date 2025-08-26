@@ -1,10 +1,10 @@
 (in-package :cl-inputs.tokens)
 
-(defparameter +k-key+    :key)
-(defparameter +k-mouse+  :mouse)
-(defparameter +k-resize+ :resize)
-(defparameter +k-paste+  :paste)
-(defparameter +k-focus+  :focus)
+(defparameter +k-key+    :key) ;; a key press or release event
+(defparameter +k-mouse+  :mouse) ;; a mouse event (click, move, etc.)
+(defparameter +k-resize+ :resize) ;; a terminal resize event
+(defparameter +k-paste+  :paste) ;; a paste event (e.g., from clipboard)
+(defparameter +k-focus+  :focus) ;; a focus event (focus in or out)
 
 (defstruct input-token
   kind   ;; one of the +k-*+ keywords

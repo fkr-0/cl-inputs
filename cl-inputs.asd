@@ -3,9 +3,10 @@
   :description "Terminal input decoding (pure), device port, and sink port."
   :license "MIT" :version "0.1.0"
   :author "Kilo Code"
-  :depends-on (#:alexandria #:uiop #:trivial-utf-8 #:bordeaux-threads)
+  :depends-on (#:alexandria #:uiop #:bordeaux-threads)
   :components
   ((:file "src/input/packages")
+   (:file "src/input/util" :depends-on ("src/input/packages"))
    (:file "src/input/tokens" :depends-on ("src/input/packages"))
    (:file "src/input/keymap" :depends-on ("src/input/packages"))
    (:file "src/input/decoder" :depends-on ("src/input/tokens" "src/input/keymap"))
@@ -16,13 +17,14 @@
    (:file "src/input/backends/tty" :depends-on ("src/input/device"))
    (:file "src/input/backends/faketerm" :depends-on ("src/input/device"))
    (:file "src/input/backends/urxvt" :depends-on ("src/input/device")))
-  :in-order-to ((asdf:test-op (asdf:test-op "cl-input/tests"))))
+  :in-order-to ((asdf:test-op (asdf:test-op "cl-inputs/tests"))))
 
 (asdf:defsystem "cl-inputs/tests"
-  :description "Test suite for cl-input."
+  :description "Test suite for cl-inputs."
   :author "Kilo Code"
   :license "MIT"
   :depends-on ("cl-inputs" "fiveam")
   :components ((:module "tests"
                 :components
                 ((:file "main")))))
+;;  :perform (asdf:test-op (op c) (asdf:symbol-call :cl-inputs.tests '#:run!)))

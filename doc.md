@@ -55,7 +55,7 @@ This is a common, established pattern (hexagonal architecture + functional core 
 ;;; src/input/packages.lisp
 (uiop:define-package :cl-inputs.tokens
   (:use :cl :alexandria)
-  (:export #:input-token #:make-token #:token-kind #:token-data #:token-ts
+  (:export #:input-token #:make-token #:input-token-kind #:token-data #:token-ts
            ;; common :kind values
            +k-key+ +k-mouse+ +k-resize+ +k-paste+ +k-focus+))
 
