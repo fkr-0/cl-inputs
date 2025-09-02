@@ -14,6 +14,14 @@
         :element-type '(unsigned-byte 8)
         :if-does-not-exist :error))
 
+;; (defun %close-stream (stream)
+;;   (when (and stream (streamp stream) (not (closed-stream-p stream)))
+;;     (close stream)))
+
+(defmethod initialized-p ((dev tty-device))
+  (and (tty-device-in dev) (tty-device-out dev)))
+;; (asdf:load-system :sb-posix)
+;; (use-package :sb-posix)
 (defun %termios-raw-mode (fd enable-p &optional original-termios)
   (if enable-p
       (let ((orig (the sb-posix:termios (sb-posix:tcgetattr fd))))
@@ -57,6 +65,12 @@
    (message :initarg :message :reader tty-device-error-message)))
 
 (defmethod enable-raw-mode ((dev tty-device))
+  (unless (initialized-p dev)
+    ;; (error 'termios-raw-mode-error
+    ;;        :device dev
+    ;;        :message "TTY device not initialized; cannot enable raw mode.")
+    (open-device dev)
+    )
   (let* ((fd (sb-sys:fd-stream-fd (tty-device-in dev)))
          (tos (%termios-raw-mode fd t)))
     (unless tos
@@ -96,3 +110,5 @@
     (when (getf modes :focus)
       (write-sequence (string-to-utf-8-bytes "[?1004h") stream))
     (finish-output stream)))
+(defmethod make-device ((backend (eql :tty)) &key (path "/dev/tty") &allow-other-keys)
+  (%make-tty-device :path path))

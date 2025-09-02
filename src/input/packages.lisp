@@ -20,22 +20,13 @@
    #:make-decoder #:decoder-state
    ;; functional decoding step:
    #:decode-chunk))
-
 (uiop:define-package :cl-inputs.device
-  (:use :cl :alexandria)
+  (:use :cl :alexandria )
   (:import-from
    #:cl-inputs.util #:as-utf-8-bytes #:string-to-utf-8-bytes)
-  (:import-from #:sb-posix #:o-rdwr
-                #:tcgetattr #:tcsetattr #:termios #:termios-lflag #:termios-cc
-                #:icanon #:echo #:vmin #:vtime #:tcsanow #:tcsaflush)
-  (:import-from #:sb-posix
-                #:tcgetattr #:tcsetattr #:termios #:termios-lflag #:termios-cc
-                #:icanon #:echo #:vmin #:vtime #:tcsanow #:tcsaflush
-                #:fcntl #:f-setfd) ; Removed o_nonblock and f_getfd, will use sb-posix::
-  (:import-from #:sb-unix
-                #:unix-open #:unix-close #:unix-read #:unix-write #:o_rdwr #:o_noctty)
   (:import-from #:sb-ext #:run-program  #:process-pid #:process-pty #:process-kill)
   (:import-from #:sb-sys #:make-fd-stream #:fd-stream-fd)
+  (:use #:sb-unix)
 
   (:export
    ;; Device port (generics; default stub prints warnings)
@@ -49,14 +40,13 @@
    ;; Optional default TTY impl constructor:
    #:make-tty-device
    #:*backend-registry*
-   #:register-backend
-   #:make-device*))
+   #:register-backend))
 
 (uiop:define-package :cl-inputs.sink
   (:use :cl :alexandria :cl-inputs.tokens)
   (:export
    ;; Sink port (generics; defaults are NO-OP)
-   #:accept-token #:on-key #:on-mouse #:on-resize #:on-paste #:on-focus
+   #:accept-token #:on-key #:on-mouse #:on-resize #:on-paste #:on-focus #:on-ctrl-c
    ;; Helpers for composing sinks:
    #:tee-sink #:fn-sink))
 
@@ -68,5 +58,5 @@
    ;; Pull mode
    #:make-input-source #:next-token #:close-input-source
    ;; Quick one-shot read helpers
-   #:read-tokens #:with-raw-input
+   #:read-tokens #:with-raw-input #:with-interruptible-input-reader
    #:input-loop))

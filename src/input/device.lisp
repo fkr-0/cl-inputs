@@ -6,15 +6,17 @@
   "CTOR is a function (&rest initargs) -> DEV."
   (setf (gethash key *backend-registry*) ctor) key)
 
-(defun make-device* (key &rest initargs)
-  (let ((ctor (gethash key *backend-registry*)))
-    (unless ctor (error "No backend registered for ~S" key))
-    (apply ctor initargs)))
+;; (defun make-device* (key &rest initargs)
+;;   (let ((ctor (gethash key *backend-registry*)))
+;;     (unless ctor (error "No backend registered for ~S" key))
+;;     (apply ctor initargs)))
 
 (defgeneric make-device (backend &key &allow-other-keys)
   (:documentation
    "Construct a device instance for BACKEND (a keyword or descriptor).
     No global singletons; return a self-contained handle."))
+
+
 
 (defgeneric device-kind (dev) (:documentation "Return a keyword like :tty, :faketerm, :urxvt."))
 
@@ -64,4 +66,4 @@
 ;;; Optional constructor for your real termios impl
 (defun make-tty-device (&key (path "/dev/tty"))
   (declare (ignore path))
-  (make-device* :tty))
+  (make-device :tty :path path))

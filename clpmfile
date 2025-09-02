@@ -1,0 +1,17 @@
+;;; -*- Mode: common-lisp; -*-
+(:api-version "0.4")
+
+(:source "quicklisp"
+ :url "https://beta.quicklisp.org/dist/quicklisp.txt"
+ :type :quicklisp)
+
+(:asd "/home/user/.roswell/lisp/quicklisp/quicklisp/quicklisp.asd")
+
+
+(:asd "./cl-inputs.asd")
+
+(:system "bordeaux-threads")
+(:system "alexandria" :source "quicklisp")
+;; (:system "str" :source "quicklisp")
+(:system "log4cl" :source "quicklisp")
+;; (:system "cl-reexport" :source "quicklisp")

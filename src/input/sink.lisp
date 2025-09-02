@@ -8,6 +8,7 @@
 (defgeneric on-resize (sink token))
 (defgeneric on-paste (sink token))
 (defgeneric on-focus (sink token))
+(defgeneric on-ctrl-c (sink token))
 
 ;; Defaults: do nothing
 (defmethod accept-token ((sink t) (tok cl-inputs.tokens:input-token)) (declare (ignore sink tok)) nil)

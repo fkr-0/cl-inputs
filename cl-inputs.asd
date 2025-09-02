@@ -3,7 +3,7 @@
   :description "Terminal input decoding (pure), device port, and sink port."
   :license "MIT" :version "0.1.0"
   :author "Kilo Code"
-  :depends-on (#:alexandria #:uiop #:bordeaux-threads)
+  :depends-on (#:alexandria #:uiop #:bordeaux-threads #:sb-posix)
   :components
   ((:file "src/input/packages")
    (:file "src/input/util" :depends-on ("src/input/packages"))

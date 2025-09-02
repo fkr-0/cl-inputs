@@ -11,35 +11,36 @@
        (:key    (on-key sink token))
        (:mouse  (on-mouse sink token))
        (:resize (on-resize sink token))
+       (:ctrl-c (on-ctrl-c sink token))
        (:paste  (on-paste sink token))
        (:focus  (on-focus sink token))))))
 
-(defun start-input-loop (&key (device (cl-inputs.device:make-device* :tty))
+(defun start-input-loop (&key (device (cl-inputs.device:make-device :tty))
                            (sink (fn-sink (lambda (_tok) (declare (ignore _tok)) nil)))
                            (decoder (cl-inputs.decoder:make-decoder)))
   "Reads from DEVICE, decodes via DECODER, pushes to SINK. Returns an INPUT-LOOP handle."
   (cl-inputs.device:enable-raw-mode device)
-  (let ((loop (make-input-loop :dev device :sink sink :decoder decoder)))
-    (setf (input-loop-thread loop)
+  (let ((in-loop (make-input-loop :dev device :sink sink :decoder decoder)))
+    (setf (input-loop-thread in-loop)
           (bt:make-thread
            (lambda ()
              (let ((buf (make-array 64 :element-type '(unsigned-byte 8))))
                (unwind-protect
-                    (loop until (input-loop-stop? loop) do
+                    (loop until (input-loop-stop? in-loop) do
                       (let ((n (cl-inputs.device:device-read-bytes device buf 0 (length buf))))
                         (when (or (eql n :eof) (null n)) (return))
                         (multiple-value-bind (tokens dec2)
-                            (cl-inputs.decoder:decode-chunk (input-loop-decoder loop)
+                            (cl-inputs.decoder:decode-chunk (input-loop-decoder in-loop)
                                                             (subseq buf 0 n))
-                          (setf (input-loop-decoder loop) dec2)
-                          (dolist (to tokens) (%deliver (input-loop-sink loop) to)))))
+                          (setf (input-loop-decoder in-loop) dec2)
+                          (dolist (to tokens) (%deliver (input-loop-sink in-loop) to)))))
                  (cl-inputs.device:disable-raw-mode device))))
            :name "cl-inputs.loop"))
-    loop))
+    in-loop))
 
-(defun stop-input-loop (loop)
-  (setf (input-loop-stop? loop) t)
-  (cl-inputs.device:close-device (input-loop-dev loop))
+(defun stop-input-loop (in-loop)
+  (setf (input-loop-stop? in-loop) t)
+  (cl-inputs.device:close-device (input-loop-dev in-loop))
   t)
 
 ;;; Pull mode: a source object that yields tokens on demand
@@ -53,7 +54,7 @@
   "A source of input tokens, typically from a device."
   dev decoder buf)
 
-(defun make-input-source (&key (device (cl-inputs.device:make-device* :tty))
+(defun make-input-source (&key (device (cl-inputs.device:make-device :tty))
                             (decoder (cl-inputs.decoder:make-decoder)))
 
   (cl-inputs.device:enable-raw-mode device)

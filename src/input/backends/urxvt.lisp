@@ -31,7 +31,7 @@
   (proc nil :type (or null t))
   (caps '(:truecolor t :mouse t :paste t :focus t :winch t :urxvt t))
   (stream nil :type (or null stream))
-  (original-termios nil :type (or null termios))
+  (original-termios nil :type (or null sb-posix:termios))
   (width 80 :type integer)
   (height 24 :type integer)
   (cursor-visible-p t :type boolean)
@@ -85,10 +85,10 @@
                                             :stream stream
                                             :original-termios original-termios)))
           ;; Set non-blocking on master PTY for reads
-          (fcntl master-fd sb-posix::f-setfd (fcntl master-fd sb-posix::f-getfd 0)) ; Clear O_NONBLOCK if set by run-program
-          (fcntl master-fd sb-posix::f-setfd (logior
-                                              (fcntl master-fd sb-posix::f-getfd 0)
-                                              sb-posix::o-nonblock))
+          (sb-posix:fcntl master-fd sb-posix::f-setfd (sb-posix:fcntl master-fd sb-posix::f-getfd 0)) ; Clear O_NONBLOCK if set by run-program
+          (sb-posix:fcntl master-fd sb-posix::f-setfd (logior
+                                                       (sb-posix:fcntl master-fd sb-posix::f-getfd 0)
+                                                       sb-posix::o-nonblock))
           (sleep 0.5) ; Give URxvt a moment to start up
 
           ;; (multiple-value-bind (w h) (get-screen-dimensions instance)
