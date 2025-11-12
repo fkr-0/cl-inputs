@@ -11,7 +11,7 @@
 
 
 (test smoke-test
-  (is-true (fboundp 'cl-inputs.api:start-input-loop) "start-input-loop should be a function.")
+  (is-true (fboundp 'cl-inputs:start-input-loop) "start-input-loop should be a function.")
   (is-true (fboundp 'cl-inputs.api:make-input-source) "make-input-source should be a function."))
 
 (test decode-simple-chars
@@ -77,7 +77,7 @@
   (let* ((dev (cl-inputs.device:make-device* :faketerm))
          (received-tokens '())
          (sink (lambda (token) (push token received-tokens)))
-         (loop-handle (start-input-loop :device dev :sink sink)))
+         (loop-handle (cl-inputs:start-input-loop :device dev :sink sink)))
     (cl-inputs.device::faketerm-inject! dev (string-to-utf-8-bytes "c"))
     (sleep 0.1) ; give the loop time to process
     (stop-input-loop loop-handle)

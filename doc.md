@@ -700,7 +700,7 @@ Below is a schematic; swap the PTY bits with your preferred library:
 
 ```lisp
 (let* ((dev (make-device* :tty :path "/dev/tty"))
-       (loop (cl-inputs.api:start-input-loop
+       (loop (cl-inputs:start-input-loop
               :device (open-device dev)
               :sink   (cl-inputs.sink:fn-sink
                         (lambda (tok) (my-handoff tok)))

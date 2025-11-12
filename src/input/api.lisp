@@ -1,68 +1,109 @@
+(uiop:define-package :cl-inputs.api
+  (:use :cl :alexandria :cl-inputs.tokens :cl-inputs.decoder :cl-inputs.device.api :cl-inputs.sink)
+  (:import-from :log4cl #:log-info)
+  (:export
+    ;; Push mode
+    ;; Pull mode
+    ;; Quick one-shot read helpers
+    #:read-tokens #:with-raw-input
+    ;; Async input handling
+    #:with-async-signal))
+
+;; #:with-interruptible-input-reader))
+
 (in-package :cl-inputs.api)
 
-;; This file is mostly for re-exporting symbols from the other packages
-;; to create a single, unified public API.
+;;;; cl-inputs.api.lisp
+;;;
+;;; Unified public API for cl-inputs. This file primarily re-exports symbols from
+;;; submodules to provide a single entry point for input handling. Extend here for
+;;; additional user-facing macros or helpers.
+;;;
+;;; All exported symbols should be documented and idiomatic.
 
 (defmacro with-raw-input ((dev) &body body)
-  `(progn  ;; let ((,dev (cl-inputs.device:open-device dev)))
+  "Execute BODY with DEV in raw char mode.
+
+Arguments:
+  DEV  -- device object supporting raw char mode
+
+Behavior:
+  Ensures raw char mode is enabled before BODY and reliably disables and closes
+  the device afterward, even on error. Safe to nest.
+
+Side Effects:
+  Enables/disables raw char mode and closes the device.
+
+Return Value:
+  Returns the result(s) of BODY."
+  `(progn
      (unwind-protect
-          (progn (cl-inputs.device:enable-raw-mode ,dev) ,@body)
-       (cl-inputs.device:disable-raw-mode ,dev)
-       (cl-inputs.device:close-device ,dev))))
+       (progn
+         (cl-inputs.device.api:enable-raw-mode ,dev)
+         (log-info "> Enabled raw char mode on device ~A" ,dev)
+         ,@body
+         (log-info "> Disabling raw char mode on device ~A" ,dev))
+       (cl-inputs.device.api:disable-raw-mode ,dev)
+       (log-info "> Closed raw char mode on device ~A" ,dev)
+       (cl-inputs.device.api:close-device ,dev)
+       (log-info "> Closed device ~A" ,dev))))
 
 (defun read-tokens (dev &key (timeout 5))
-  "Reads tokens from a device until timeout."
-  (let ((src (make-input-source :device dev))
-        (tokens '()))
-    (loop for tok = (next-token src :timeout timeout)
-          while tok
-          do (push tok tokens))
-    (close-input-source src)
+  "Read all available tokens from DEV until TIMEOUT seconds elapse.
+
+Arguments:
+  DEV     -- device object supporting input
+  TIMEOUT -- maximum seconds to wait for input (type: real, default: 5)
+
+Return Value:
+  List of tokens read from DEV.
+
+Side Effects:
+  Closes the input source after reading."
+  (let ((src (cl-inputs.loop:make-input-source :device dev))
+         (tokens '()))
+    (loop for tok = (cl-inputs.loop:next-token src :timeout timeout)
+      while tok
+      do (push tok tokens))
+    (cl-inputs.loop:close-input-source src)
     (nreverse tokens)))
 
 (defmacro with-async-signal (return-var &body body)
-  "Spawn a background thread running BODY.  RETURN-VAR is a user-supplied symbol,
-initialized to NIL; you can (SETF RETURN-VAR …) anywhere in BODY to record progress
-or final result.  Defines a global function SIGNAL-FN which, when called, will:
-
- 1. interrupt the thread,
- 2. throw a tag 'interrupt carrying the current RETURN-VAR,
- 3. return that RETURN-VAR to the caller of SIGNAL-FN.
-
-The macro expands to evaluating to the thread object itself."
+  "Run BODY in a background thread, allowing interruption and result retrieval.
+RETURN-VAR is a symbol bound to NIL and can be set within BODY to track progress or result.
+Defines a SIGNAL-FN function that interrupts the thread and returns the current value of RETURN-VAR.
+Returns (values thread signal-fn device)."
   (let* ((pkg *package*)
-         (thread-name (format nil "__~A-THREAD__" (symbol-name return-var)))
-         (thread-sym  (intern thread-name pkg))
-         (device (make-device :tty))
-         (ret-sym (gensym)))
+          (thread-name (format nil "__~A-THREAD__" (symbol-name return-var)))
+          (thread-sym  (intern thread-name pkg))
+          (device (make-device :tty))
+          (ret-sym (gensym)))
     `(progn
 
-       ;; export the thread-sym so it can be used in the signal function
-       ;; export the signal-fn so it can be used in the thread
+       ;; Export the thread symbol and signal function for use in the thread context.
        ;; 3. Start the thread, wrapping BODY in a (CATCH 'interrupt …)
        (let* ((,return-var nil)
-              (,ret-sym ,return-var)
-              (,thread-sym
-                (bordeaux-threads:make-thread
-                 (lambda ()
-                   (catch 'interrupt
-
-                     (with-raw-input
+               (,ret-sym ,return-var)
+               (,thread-sym
+                 (bordeaux-threads:make-thread
+                   (lambda ()
+                     (catch 'interrupt
+                       (with-raw-input
                          ,device
-                       ,@body)))))
-              (interrupt-fn
-                (lambda ()
+                         ,@body)))))
+               (interrupt-fn
+                 (lambda ()
 
-                  ;; 1. Interrupt the thread
-                  ;; 2. Throw 'interrupt with last value of RETURN-VAR
-                  ;; Note: We use a lambda here to delay the evaluation of RETURN-VAR
-                  ;; until the interrupt function is called.)
-                  ;; ,(format
-                  ;;   nil
-                  ;;   "Interrupt thread ~A% and return last value of ~A%."
-                  ;;   `,thread-name `,return-var)
-                  (bordeaux-threads:interrupt-thread
-                   ,thread-sym
-                   (lambda () (throw 'interrupt ,ret-sym)))
-                  ,return-var)))
+                   ;; 1. Interrupt the thread
+                   ;; 2. Throw 'interrupt with last value of RETURN-VAR
+                   ;; Note: We use a lambda here to delay the evaluation of RETURN-VAR
+                   ;; until the interrupt function is called.)
+                   ;; ,(format
+                   ;;   nil
+                   ;;   "Interrupt thread ~A% and return last value of ~A%."
+                   ;;   `,thread-name `,return-var)
+                   (bordeaux-threads:interrupt-thread
+                     ,thread-sym
+                     (lambda () (throw 'interrupt ,ret-sym)))
+                   ,return-var)))
          (values ,thread-sym interrupt-fn device)))))
