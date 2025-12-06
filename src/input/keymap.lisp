@@ -8,9 +8,7 @@
 (in-package :cl-inputs.keymap)
 
 (defparameter *default-keymap*
-  "Default keymap: maps common escape sequences to symbolic key names.
-Extend this table to support additional keys or custom layouts."
-  `(((mapcar #'char-code '(#\Esc #\[ #\A)) :up)
+  `( (,(mapcar #'char-code '(#\Esc #\[ #\A)) :up)
      (,(mapcar #'char-code '(#\Esc #\[ #\A)) :up)
      (,(mapcar #'char-code '(#\Esc #\[ #\B)) :down)
      (,(mapcar #'char-code '(#\Esc #\[ #\C)) :right)
@@ -36,7 +34,10 @@ Extend this table to support additional keys or custom layouts."
      (,(mapcar #'char-code '(#\Esc #\[ #\2 #\0 #\~)) :f9)
      (,(mapcar #'char-code '(#\Esc #\[ #\2 #\1 #\~)) :f10)
      (,(mapcar #'char-code '(#\Esc #\[ #\2 #\3 #\~)) :f11)
-     (,(mapcar #'char-code '(#\Esc #\[ #\2 #\4 #\~)) :f12)))
+     (,(mapcar #'char-code '(#\Esc #\[ #\2 #\4 #\~)) :f12))
+  "Default keymap: maps common escape sequences to symbolic key names.
+Extend this table to support additional keys or custom layouts."
+  )
 
 (defun lookup-seq (octets &optional (table *default-keymap*))
   "Look up OCTETS (vector of char codes) in TABLE and return the mapped key symbol.

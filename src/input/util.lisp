@@ -5,7 +5,7 @@
 
 (uiop:define-package :cl-inputs.util
   (:use :cl :alexandria)
-  (:export #:as-utf-8-bytes
+  (:export #:as-utf-8-bytes #:write-output
     #:string-to-utf-8-bytes))
 
 (in-package :cl-inputs.util)
@@ -40,18 +40,33 @@ Return Value:
            (,writer (logior #b10000000 (ldb (byte 6 0) ,char-code))))))))
 
 (defun string-to-utf-8-bytes (str)
-  "Convert STR to a sequence of UTF-8 bytes.
+  "Convert STR to a freshly allocated (unsigned-byte 8) vector holding its UTF-8 bytes.
 
 Arguments:
   STR -- a string to encode (type: string)
 
 Return Value:
-  A vector of (unsigned-byte 8) containing the UTF-8 encoding of STR.
+  A vector of (unsigned-byte 8) containing the UTF-8 encoding of STR. The vector
+  is adjustable with a fill pointer so callers can re-use it if desired.
 
 Side Effects:
   None."
-  (let ((result (make-array (length str) :element-type '(unsigned-byte 8))))
-    (loop for i from 0 below (length str)
-      do (as-utf-8-bytes (char str i)
-           (lambda (byte) (setf (aref result i) byte))))
-    result))
+  (let ((buffer (make-array 0 :element-type '(unsigned-byte 8)
+                  :adjustable t :fill-pointer 0)))
+    (loop for ch across str do
+      (as-utf-8-bytes ch
+        (lambda (byte)
+          (vector-push-extend byte buffer))))
+    (let* ((len (length buffer))
+            (result (make-array len :element-type '(unsigned-byte 8))))
+      (replace result buffer)
+      result)))
+
+(defun write-output (output stream)
+  "Write output to the terminal
+This method should be implemented by subclasses of low-level-terminal."
+  ;; (declare (ignore style))
+  ;; ;; (with-lock (term)
+  ;; (exec-sequence term :cursor-set-position y x)
+  (dotimes (i (length output))
+    (as-utf-8-bytes (char output i) (lambda (x) (write-byte x stream)))))

@@ -306,10 +306,28 @@ Side Effects:
 ;; == cl-inputs/src/input-loop.lisp ==
 
 (defun %maybe-signal (in-loop)
+  "Safely notify a condition variable in the given IN-LOOP object.
+
+Attempts to retrieve the 'condition' and 'condition-lock' slots from IN-LOOP.
+If a condition variable is found, it is notified. If a lock is also present,
+the notification occurs within a lock-held context. If either slot is missing,
+no error is signaled.
+
++ IN-LOOP: An object that may have 'condition' and 'condition-lock' slots.
++ Uses Bordeaux Threads (bt) for locking and condition notification.
++ Ignores errors if slots are missing or unbound.
+
+Example:
+  (%maybe-signal some-loop-object)
+
+This function is useful in concurrent code to safely notify waiting threads,
+even when the presence of synchronization primitives is not guaranteed."
   (let ((cond (ignore-errors (slot-value in-loop 'condition)))
          (lock (ignore-errors (slot-value in-loop 'condition-lock))))
     (when cond
-      (if lock (bt:with-lock-held (lock) (bt:condition-notify cond))
+      (if lock
+        (bt:with-lock-held (lock)
+          (bt:condition-notify cond))
         (bt:condition-notify cond)))))
 ;; == cl-inputs/input-loop.lisp ==
 ;; Wait → ONE read(2) → decode. Keep fd in BLOCKING mode; VMIN handles latency.
@@ -425,7 +443,7 @@ Side Effects:
 
 
 (defun start-input-loop
-  (&key (device (cl-inputs.device.api:make-device :tty))
+  (&key (device (cl-inputs.device.api:make-device :tty)) ;;:urxvt))
     (sink (fn-sink (lambda (_tok)
                      (log-warn "No sink defined; dropping token ~A" _tok)
                      ;; (declare (ignore _tok))
@@ -433,6 +451,8 @@ Side Effects:
     (decoder (cl-inputs.decoder:make-decoder))
     (mode :async)) ;; :async or :sync
   "Start an input loop. MODE can be :async (default) or :sync."
+  (if (keywordp device)
+    (setf device (cl-inputs.device.api:make-device device)))
   (cl-inputs.device.api:enable-raw-mode device)
   (let* ((condition (bt:make-condition-variable))
           (condition-lock (bt:make-lock))
@@ -454,7 +474,7 @@ Side Effects:
         ;; No thread, run in calling thread
 
         (progn
-          (log-info "Starting input loop in sync mode; blocking caller thread.")
+          ;; (log-info "Starting input loop in sync mode; blocking caller thread.")
           (input-loop-main in-loop :sync t))))
     in-loop))
 
@@ -490,29 +510,73 @@ Fields:
 All fields are required."
   dev decoder buf)
 
+(defmethod print-object ((src input-source) stream)
+  (format stream "#<INPUT-SOURCE dev=~A decoder=~A buf-size=~A>"
+    (input-source-dev src)
+    (input-source-decoder src)
+    (array-total-size (input-source-buf src))))
+
+(defvar *default-input-source* nil
+  "Default input source for cl-inputs.")
+(defun get-input-source ()
+  "Get the default input source, creating it if necessary."
+  (or *default-input-source*
+    ))
 (defun make-input-source (&key (device (cl-inputs.device.api:make-device :tty))
                            (decoder (cl-inputs.decoder:make-decoder)))
+  (cl-inputs.device.api:open-device device)
+  (ignore-errors (cl-inputs.device.api:enable-raw-char-mode device))
+  (ignore-errors (cl-inputs.device.api:enable-raw-mode device))
+  (let ((src (%make-input-source :dev device :decoder decoder
+               :buf (make-array 4096 :element-type '(unsigned-byte 8)))))
+    (setf *default-input-source* src)
+    src))
 
-  (cl-inputs.device.api:enable-raw-mode device)
-  (%make-input-source :dev device :decoder decoder :buf (make-array 4096 :element-type '(unsigned-byte 8))))
-
-(defun next-token (src &key (timeout nil))
-  "Blocking read (or timed if DEVICE supports it). Returns a token or NIL on EOF."
-  (declare (ignore timeout)) ; extend in your device impl
-  (let* ((n
-           (cl-inputs.device.api:device-read-bytes
-             (input-source-dev src)
-             (input-source-buf src) 0 4096)))
+;; override array printer
+(defmethod print-object ((arr array) stream)
+  ;; prevent recursive printing while printing arr
+  (let ((*print-readably* nil)
+         (*print-level* nil)
+         (*print-length* nil))
+    ;; Detect element type if you want different behaviours
     (cond
-      ((or (eql n :eof) (null n) (zerop n)) nil)
+      ((equal (array-element-type arr) '(unsigned-byte 8))
+        (format stream "#<UB8 ~D bytes: "
+          (array-total-size arr))
+        ;; print first few bytes as hex
+        (let ((limit (min 16 (array-total-size arr))))
+          (dotimes (i limit)
+            (format stream "~2,'0X " (aref arr i))))
+        (when (> (array-total-size arr) 16)
+          (format stream "..."))
+        (format stream ">"))
       (t
-        (multiple-value-bind (tokens dec2)
-          (cl-inputs.decoder:decode-chunk (input-source-decoder src)
-            (subseq (input-source-buf src) 0 n))
-          (setf (input-source-decoder src) dec2)
-          (first tokens))))))
+        ;; fallback to default
+        (call-next-method)))))
+
+
+(defun next-token (src &key timeout)
+  "Blocking read (or timed if DEVICE supports it). Returns a token or NIL on EOF."
+  (let* ((dev (input-source-dev src))
+          (buf (input-source-buf src)))
+    (when (and dev (numberp timeout))
+      (let ((ms (if (<= timeout 0) 0 (round (* timeout 1000)))))
+        (unless (cl-inputs.device.api:device-wait-readable dev ms)
+          (return-from next-token nil))))
+    (let ((n (cl-inputs.device.api:device-read-bytes dev buf 0 4096)))
+      (cond
+        ((or (eql n :eof) (null n) (zerop n)) nil)
+        (t
+          (multiple-value-bind (tokens dec2)
+            (cl-inputs.decoder:decode-chunk (input-source-decoder src)
+              (subseq buf 0 n))
+            (setf (input-source-decoder src) dec2)
+            (first tokens)))))))
 
 (defun close-input-source (src)
-  (cl-inputs.device.api:disable-raw-mode (input-source-dev src))
-  (cl-inputs.device.api:close-device (input-source-dev src))
+  (let ((dev (input-source-dev src)))
+    (when dev
+      (ignore-errors (cl-inputs.device.api:disable-raw-char-mode dev))
+      (ignore-errors (cl-inputs.device.api:disable-raw-mode dev))
+      (ignore-errors (cl-inputs.device.api:close-device dev))))
   t)

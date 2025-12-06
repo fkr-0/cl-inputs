@@ -2,10 +2,12 @@
   (:use :cl :alexandria :cl-inputs.tokens :cl-inputs.decoder :cl-inputs.device.api :cl-inputs.sink)
   (:import-from :log4cl #:log-info)
   (:export
-    ;; Push mode
-    ;; Pull mode
-    ;; Quick one-shot read helpers
-    #:read-tokens #:with-raw-input
+    ;; Pull/Push helpers
+    #:with-raw-input
+    #:make-ready-input-source
+    #:with-input-source
+    #:set-terminal-modes
+    #:read-tokens
     ;; Async input handling
     #:with-async-signal))
 
@@ -22,31 +24,37 @@
 ;;; All exported symbols should be documented and idiomatic.
 
 (defmacro with-raw-input ((dev) &body body)
-  "Execute BODY with DEV in raw char mode.
-
-Arguments:
-  DEV  -- device object supporting raw char mode
-
-Behavior:
-  Ensures raw char mode is enabled before BODY and reliably disables and closes
-  the device afterward, even on error. Safe to nest.
-
-Side Effects:
-  Enables/disables raw char mode and closes the device.
-
-Return Value:
-  Returns the result(s) of BODY."
+  "Open DEV and enable raw-char-mode + raw-mode for BODY; restore/close on exit."
   `(progn
      (unwind-protect
        (progn
+         (cl-inputs.device.api:open-device ,dev)
+         (ignore-errors (cl-inputs.device.api:enable-raw-char-mode ,dev))
          (cl-inputs.device.api:enable-raw-mode ,dev)
-         (log-info "> Enabled raw char mode on device ~A" ,dev)
-         ,@body
-         (log-info "> Disabling raw char mode on device ~A" ,dev))
-       (cl-inputs.device.api:disable-raw-mode ,dev)
-       (log-info "> Closed raw char mode on device ~A" ,dev)
-       (cl-inputs.device.api:close-device ,dev)
-       (log-info "> Closed device ~A" ,dev))))
+         (log-info "> Enabled raw input on device ~A" ,dev)
+         ,@body)
+       (ignore-errors (cl-inputs.device.api:disable-raw-char-mode ,dev))
+       (ignore-errors (cl-inputs.device.api:disable-raw-mode ,dev))
+       (ignore-errors (cl-inputs.device.api:close-device ,dev)))))
+
+(defun make-ready-input-source (&key (device (cl-inputs.device.api:make-device :tty)) (decoder (cl-inputs.decoder:make-decoder)))
+  "Open DEVICE, enable raw-char-mode, and return an input-source ready for next-token."
+  (cl-inputs.device.api:open-device device)
+  (ignore-errors (cl-inputs.device.api:enable-raw-char-mode device))
+  (cl-inputs.device.api:enable-raw-mode device)
+  (cl-inputs.loop:make-input-source :device device :decoder decoder))
+
+(defmacro with-input-source ((var &key (device '(cl-inputs.device.api:make-device :tty)) (decoder '(cl-inputs.decoder:make-decoder))) &body body)
+  "Bind VAR to a ready input-source around BODY; cleans up on exit."
+  `(let ((,var (make-ready-input-source :device ,device :decoder ,decoder)))
+     (unwind-protect
+       (progn ,@body)
+       (ignore-errors (cl-inputs.loop:close-input-source ,var)))))
+
+(defun set-terminal-modes (dev &key mouse focus paste)
+  "Convenience: toggle device terminal modes via device-set-modes."
+  (let ((modes (list :mouse mouse :focus focus :paste paste)))
+    (cl-inputs.device.api:device-set-modes dev modes)))
 
 (defun read-tokens (dev &key (timeout 5))
   "Read all available tokens from DEV until TIMEOUT seconds elapse.

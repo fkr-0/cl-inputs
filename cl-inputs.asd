@@ -10,15 +10,18 @@
     (:file "src/input/tokens")
     (:file "src/input/keymap")
     (:file "src/input/escape")
+    (:file "src/terminal/ansii")
+
     (:file "src/input/decoder" :depends-on ("src/input/tokens" "src/input/keymap"))
     (:file "src/input/sink" :depends-on ("src/input/tokens"))
     (:file "src/input/device/device-api")
-    (:file "src/input/device/tty" :depends-on ("src/input/device/device-api"))
-    (:file "src/input/device/faketerm" :depends-on ("src/input/device/device-api"))
-    (:file "src/input/device/urxvt" :depends-on ("src/input/device/device-api"))
+    (:file "src/terminal/api" :depends-on ("src/input/util" "src/input/device/device-api"))
+    (:file "src/input/device/tty" :depends-on ("src/input/device/device-api" "src/terminal/api"))
+    (:file "src/input/device/faketerm" :depends-on ("src/input/device/device-api" "src/terminal/api"))
+    (:file "src/input/device/urxvt" :depends-on ("src/input/device/device-api" "src/terminal/api"))
     (:file "src/input/loop" :depends-on ("src/input/device/device-api" "src/input/decoder" "src/input/sink"))
     (:file "src/input/api" :depends-on ("src/input/loop"))
-    (:file "src/input/package"))
+    (:file "src/input/package" :depends-on ("src/terminal/api")))
   :in-order-to ((asdf:test-op (asdf:test-op "cl-inputs/tests"))))
 
 (asdf:defsystem "cl-inputs/tests"
