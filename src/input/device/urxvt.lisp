@@ -39,13 +39,13 @@
     #:scroll-lines #:set-cursor-position #:get-cursor-position #:hide-cursor #:show-cursor
     #:flush-output #:apply-style #:reset-style #:with-styled-output #:%emit-ansi
     #:%style->sgr-string #:+esc+))
+(in-package :cl-inputs.device.urxvt)
 ;; Optional default TTY impl constructor:
 (defvar master-fd nil)
 (defvar slave-fd nil)
 (defvar slave-name nil)
 
 ;; Define PTY handling functions
-(in-package :cl-user)
 (progn
   (define-alien-routine ptsname c-string (fd int)) ;; char *ptsname(int fd);
 
@@ -59,9 +59,9 @@
                          sb-unix:o_noctty)
                        #o666)))
       (when master-fd
-        (cl-user::grantpt master-fd)
-        (cl-user::unlockpt master-fd)
-        (let* ((slave-name (cl-user::ptsname master-fd))
+        (grantpt master-fd)
+        (unlockpt master-fd)
+        (let* ((slave-name (ptsname master-fd))
                 (slave-fd (sb-unix:unix-open slave-name
                             (logior sb-unix:o_rdwr
                               sb-unix:o_noctty)
@@ -107,7 +107,7 @@
     :output nil
     :wait nil))
 (defun spawn-urxvt-with-pty ()
-  (multiple-value-bind (mm ss nn) (cl-user::find-a-pty)
+  (multiple-value-bind (mm ss nn) (find-a-pty)
     (setf master-fd mm slave-fd ss slave-name nn)
     ;; Ensure slave FD is not closed-on-exec so urxvt can inherit it
     (sb-posix:fcntl slave-fd sb-posix:f-setfd 0)
@@ -268,7 +268,7 @@ All fields are required unless otherwise noted."
                                         ; (urxvt-args '("-fn" "xft:monospace:size=12")))
   (format t "Spawning URxvt terminal with program: ~A~%" urxvt-program)
   
-  (multiple-value-bind (master-fd slave-fd pty-name proc) (cl-user::spawn-urxvt-with-pty)
+  (multiple-value-bind (master-fd slave-fd pty-name proc) (spawn-urxvt-with-pty)
     (handler-case
       (let* (
               ;; (process (run-program urxvt-program

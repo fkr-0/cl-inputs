@@ -2,7 +2,7 @@
   (:use :cl :fiveam)
   (:import-from :elmtui.app #:defapplication)
   (:import-from :elmtui.app.api #:run-application)
-  (:import-from :elmtui.tea-state.api #:make-update-result #:state-ref)
+  (:import-from :elmtui.state.api #:make-update-result #:state-ref)
   (:import-from :cl-inputs.device.api #:make-device)
   (:import-from :cl-inputs.api #:make-ready-input-source)
   (:import-from :cl-inputs.loop #:next-token #:close-input-source)
