@@ -1,0 +1,17 @@
+#!/usr/bin/bash
+# Wrapper for compiling cl-inputs
+# Usage: bin/compile [system-name]
+#
+# Examples:
+#   bin/compile           - Compile main system
+#   bin/compile tests     - Compile test system
+
+cd "$(dirname "$0")/.."
+
+SYSTEM="cl-inputs"
+if [ "$1" = "tests" ]; then
+    SYSTEM="cl-inputs/tests"
+fi
+
+clpm bundle exec --with-client sbcl -- --noinform --non-interactive \
+    --eval "(asdf:compile-system :$SYSTEM :force t)"

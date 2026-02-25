@@ -1,0 +1,15 @@
+#!/usr/bin/bash
+# Wrapper for running cl-inputs tests
+# Usage: bin/test [suite-name]
+
+cd "$(dirname "$0")/.."
+
+if [ -n "$1" ]; then
+    clpm bundle exec --with-client sbcl -- --noinform --non-interactive \
+        --eval '(asdf:load-system :cl-inputs/tests)' \
+        --eval "(5am:run! (find-symbol \"$1\" \"CL-INPUTS.TESTS\"))"
+else
+    clpm bundle exec --with-client sbcl -- --noinform --non-interactive \
+        --eval '(asdf:load-system :cl-inputs/tests)' \
+        --eval '(cl-inputs.tests:run-all-cl-inputs-tests)'
+fi

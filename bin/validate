@@ -1,0 +1,27 @@
+#!/usr/bin/bash
+# Wrapper for validating Lisp files with type-aware S-expression checking
+# Usage: bin/validate file.lisp [file2.lisp ...]
+
+SCRIPT_DIR="$(dirname "$0")"
+VALIDATOR="$SCRIPT_DIR/../.claude/skills/sexp-manipulator/scripts/sexp_validator.py"
+
+if [ $# -eq 0 ]; then
+    echo "Usage: bin/validate file.lisp [file2.lisp ...]"
+    echo ""
+    echo "Validates Lisp files for balanced S-expressions."
+    exit 1
+fi
+
+EXIT=0
+for file in "$@"; do
+    echo "Validating: $file"
+    if python3 "$VALIDATOR" "$file"; then
+        echo "  ✓ Valid"
+    else
+        echo "  ✗ Invalid"
+        EXIT=1
+    fi
+    echo ""
+done
+
+exit $EXIT

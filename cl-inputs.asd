@@ -11,6 +11,7 @@
     (:file "src/input/keymap")
     (:file "src/input/escape")
     (:file "src/terminal/ansii")
+    (:file "src/input/adapters" :depends-on ("src/input/tokens" "src/terminal/ansii"))
 
     (:file "src/input/decoder" :depends-on ("src/input/tokens" "src/input/keymap"))
     (:file "src/input/sink" :depends-on ("src/input/tokens"))

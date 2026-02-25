@@ -1,6 +1,7 @@
 (defpackage :cl-inputs.tests
   (:use :cl :fiveam :cl-inputs.api :cl-inputs.util :cl-inputs.loop)
-  (:export #:run-all-cl-inputs-tests))
+  (:export #:run-all-cl-inputs-tests
+           #:cl-inputs-test))
 
 (in-package :cl-inputs.tests)
 
@@ -13,10 +14,10 @@
 (defmacro faketerm-assert-screen (device &rest rows)
   `(is (equal ',rows (cl-inputs.device.faketerm:faketerm-screen-lines ,device))))
 
-(def-suite :cl-inputs
+(def-suite cl-inputs-test
   :description "Tests for the cl-inputs library.")
 
-(in-suite :cl-inputs)
+(in-suite cl-inputs-test)
 
 
 (test smoke-test
@@ -196,8 +197,8 @@
 
 
 (defun run-all-cl-inputs-tests ()
-  "Run all elmtui tests (alias for run-tests)"
-  (fiveam:run-all-tests))
+  "Run all cl-inputs tests"
+  (5am:run! (find-symbol "CL-INPUTS-TEST" "CL-INPUTS.TESTS")))
 
 ;; Integration test placeholder for a simple defapplication using faketerm
 ;; (Currently a stub; enable once pipeline supports headless run cleanly)

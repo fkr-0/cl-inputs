@@ -10,5 +10,3 @@
     :cl-inputs.keymap :cl-inputs.tokens :cl-inputs.terminal.api))
 
 (in-package :cl-inputs)
-
-

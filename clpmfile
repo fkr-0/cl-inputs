@@ -13,6 +13,7 @@
 
 
 (:asd "./cl-inputs.asd")
+(:asd "./cl-inputs-tests.asd")
 
 (:system "bordeaux-threads")
 (:system "alexandria" :source "quicklisp")
