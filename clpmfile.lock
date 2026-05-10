@@ -9,12 +9,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 :sources
+(:implicit-file :type :file-system :system-files ("./cl-inputs-tests.asd"))
 (:implicit-file :type :file-system :system-files ("./cl-inputs.asd"))
 (:implicit-file :type :file-system :system-files
  ("/home/user/.roswell/lisp/quicklisp/quicklisp/quicklisp.asd"))
 (:implicit-vcs :type :vcs :projects (("fiveam" :github :path "lispci/fiveam")))
-("quicklisp" :url "https://beta.quicklisp.org/dist/quicklisp.txt" :type
- :quicklisp)
+("quicklisp" :url "https://quicklisp.common-lisp-project-index.org/" :type
+ :clpi)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -25,6 +26,7 @@
 (:system :name "log4cl" :source "quicklisp")
 (:system :name "alexandria" :source "quicklisp")
 (:system :name "bordeaux-threads")
+(:asd-file :name "./cl-inputs-tests.asd")
 (:asd-file :name "./cl-inputs.asd")
 (:asd-file :name "/home/user/.roswell/lisp/quicklisp/quicklisp/quicklisp.asd")
 (:project :name "fiveam" :commit "e11dee752a8f59065033ef9d60641d4a2f1e8379"
@@ -36,25 +38,20 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 :releases
+("./cl-inputs-tests.asd" :version :newest :source :implicit-file :systems nil)
 ("./cl-inputs.asd" :version :newest :source :implicit-file :systems nil)
 ("/home/user/.roswell/lisp/quicklisp/quicklisp/quicklisp.asd" :version :newest
  :source :implicit-file :systems ("quicklisp"))
-("alexandria" :version "2024-10-12" :source "quicklisp" :systems ("alexandria"))
-("asdf-flv" :version "2023-10-21" :source "quicklisp" :systems
+("alexandria" :version "2022-07-08" :source "quicklisp" :systems ("alexandria"))
+("asdf-flv" :version "2016-04-21" :source "quicklisp" :systems
  ("net.didierverna.asdf-flv"))
-("bordeaux-threads" :version "2024-10-12" :source "quicklisp" :systems
+("bordeaux-threads" :version "2022-07-08" :source "quicklisp" :systems
  ("bordeaux-threads"))
 ("fiveam" :version (:commit "e11dee752a8f59065033ef9d60641d4a2f1e8379") :source
  :implicit-vcs :systems ("fiveam" "fiveam/test"))
-("global-vars" :version "2014-11-06" :source "quicklisp" :systems
- ("global-vars"))
-("log4cl" :version "2023-06-18" :source "quicklisp" :systems ("log4cl"))
-("trivial-backtrace" :version "2023-02-15" :source "quicklisp" :systems
+("log4cl" :version "2021-12-09" :source "quicklisp" :systems ("log4cl"))
+("trivial-backtrace" :version "2020-06-10" :source "quicklisp" :systems
  ("trivial-backtrace"))
-("trivial-features" :version "2025-06-22" :source "quicklisp" :systems
- ("trivial-features"))
-("trivial-garbage" :version "2023-10-21" :source "quicklisp" :systems
- ("trivial-garbage"))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -62,6 +59,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 :reverse-dependencies
+("./cl-inputs-tests.asd" (t (:asd-file :name "./cl-inputs-tests.asd")))
+
 ("./cl-inputs.asd" (t (:asd-file :name "./cl-inputs.asd")))
 
 ("/home/user/.roswell/lisp/quicklisp/quicklisp/quicklisp.asd"
@@ -85,17 +84,8 @@
   (:project :name "fiveam" :commit "e11dee752a8f59065033ef9d60641d4a2f1e8379"
    :source :implicit-vcs)))
 
-("global-vars"
- ((:system :name "bordeaux-threads") (:system :name "global-vars")))
-
 ("log4cl" (t (:system :name "log4cl" :source "quicklisp")))
 
 ("trivial-backtrace"
  ((:system :name "fiveam") (:system :name "trivial-backtrace")))
-
-("trivial-features"
- ((:system :name "bordeaux-threads") (:system :name "trivial-features")))
-
-("trivial-garbage"
- ((:system :name "bordeaux-threads") (:system :name "trivial-garbage")))
 

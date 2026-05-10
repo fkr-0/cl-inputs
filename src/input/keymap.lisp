@@ -42,7 +42,7 @@ Extend this table to support additional keys or custom layouts."
 (defun lookup-seq (octets &optional (table *default-keymap*))
   "Look up OCTETS (vector of char codes) in TABLE and return the mapped key symbol.
 Returns NIL if no match is found."
-  (log-info "Looking up sequence: ~A~%" octets)
+  (log-debug "Looking up sequence: ~A" octets)
   (let ((match (find (coerce octets 'list) table
                  :key #'first
                  :test #'equal)))

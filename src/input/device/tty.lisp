@@ -692,56 +692,62 @@ back to `read-sequence` on the input stream."
         (write-output rendered (%tty-out instance))))))
 
 (defmethod get-cursor-position ((instance tty-device))
-  (let ((response-str nil)
-         ;; (default-w 0)
-         ;; (default-h 0)
-         )
+  (let ((response-str nil))
     (with-terminal-lock (instance)
       (send-sequence instance :cursor-report)
       (finish-output (%tty-out instance))
-
       (let ((response-chars '())
-             (stream (%tty-in instance))
-             (deadline (+ (get-internal-real-time) (* 0.5 internal-time-units-per-second)))) ; 0.5s total timeout
+            (stream (%tty-in instance))
+            (deadline (+ (get-internal-real-time)
+                         (* 0.5 internal-time-units-per-second))))
         (loop
           (when (> (get-internal-real-time) deadline)
-            (log:warn "Timeout waiting for cursor report. Read so far: ~S"  (nreverse (copy-list response-chars) ))
-            (return)) ; Exit loop, response-str will be nil or partial
-
-          (let ((char (read-byte stream nil :eof)))
-            (cond
-              ((eq char :eof)
-                (log:warn "EOF encountered while reading cursor report. Read so far: ~S" (coerce (nreverse (copy-list response-chars)) 'string))
-                (return)) ; Exit loop
-              (t ; Character read
-                (push char response-chars)
-                (when (= char (char-code #\R))
-                  (setq response-str (coerce (mapcar #'code-char (nreverse response-chars)) 'string))
-                  (log:debug "Cursor report full response read: ~S" response-str)
-                  (return))))))))
+            (log:warn "Timeout waiting for cursor report. Read so far: ~S"
+                      (nreverse (copy-list response-chars)))
+            (return))
+          (cond
+            ((listen stream)
+             (let ((char (read-byte stream nil :eof)))
+               (cond
+                 ((eq char :eof)
+                  (log:warn "EOF encountered while reading cursor report. Read so far: ~S"
+                            (coerce (nreverse (copy-list response-chars)) 'string))
+                  (return))
+                 (t
+                  (push char response-chars)
+                  (when (= char (char-code #\R))
+                    (setf response-str
+                          (coerce (mapcar #'code-char (nreverse response-chars))
+                                  'string))
+                    (log:debug "Cursor report full response read: ~S" response-str)
+                    (return))))))
+            (t
+             (sleep 0.01))))))
     (when response-str
       (handler-case
-        (let* ((esc-pos (position #\Esc response-str))
-                (bracket-pos (position #\[ response-str :start (if esc-pos (1+ esc-pos) 0)))
-                (r-pos (position #\R response-str :from-end t)))
-          (if (and esc-pos bracket-pos r-pos (< bracket-pos r-pos) (> r-pos (1+ bracket-pos))) ; Ensure content between [ and R
-            (let* ((content (subseq response-str (1+ bracket-pos) r-pos))
-                    (parts (uiop:split-string content :separator '(#\;))))
-              (if (and (= (length parts) 2)
-                    (every #'digit-char-p (first parts))
-                    (plusp (length (first parts))) ; Ensure not empty string
-                    (every #'digit-char-p (second parts))
-                    (plusp (length (second parts)))) ; Ensure not empty string
-                (let ((parsed-h (parse-integer (first parts)))
-                       (parsed-w (parse-integer (second parts))))
-                  (log:info "Parsed dimensions: W=~A, H=~A from ~S" parsed-w parsed-h response-str)
-
-                  (return-from get-cursor-position (values parsed-w parsed-h)))
-                (log:warn "Could not parse dimensions from report parts: ~S (original: ~S)" parts response-str)))
-            (log:warn "Malformed cursor report: ~S. ESC:~S, [:~S, R:~S" response-str esc-pos bracket-pos r-pos)))
+          (let* ((esc-pos (position #\Esc response-str))
+                 (bracket-pos (position #\[ response-str :start (if esc-pos (1+ esc-pos) 0)))
+                 (r-pos (position #\R response-str :from-end t)))
+            (if (and esc-pos bracket-pos r-pos (< bracket-pos r-pos) (> r-pos (1+ bracket-pos)))
+                (let* ((content (subseq response-str (1+ bracket-pos) r-pos))
+                       (parts (uiop:split-string content :separator '(#\;))))
+                  (if (and (= (length parts) 2)
+                           (every #'digit-char-p (first parts))
+                           (plusp (length (first parts)))
+                           (every #'digit-char-p (second parts))
+                           (plusp (length (second parts))))
+                      (let ((parsed-row (parse-integer (first parts)))
+                            (parsed-col (parse-integer (second parts))))
+                        (log:info "Parsed cursor position: row=~A, col=~A from ~S"
+                                  parsed-row parsed-col response-str)
+                        (return-from get-cursor-position (values (1- parsed-row) (1- parsed-col))))
+                      (log:warn "Could not parse cursor report parts: ~S (original: ~S)"
+                                parts response-str)))
+                (log:warn "Malformed cursor report: ~S. ESC:~S, [:~S, R:~S"
+                          response-str esc-pos bracket-pos r-pos)))
         (error (e)
           (log:error "Error parsing cursor report string ~S: ~A" response-str e)
-          (values 0 0)))))) ; Exit loop, proceed to parse
+          (values 0 0))))))
 
 (defmethod get-terminal-size ((instance tty-device))
   (let ((response-str nil)
@@ -761,20 +767,21 @@ back to `read-sequence` on the input stream."
             (log:warn "Timeout waiting for cursor report. Read so far: ~S" (nreverse (copy-list response-chars) ))
             (return)) ; Exit loop, response-str will be nil or partial
 
-          (let ((char (read-byte stream nil :eof)))
-            (cond
-              ((eq char :eof)
-                (log:warn "EOF encountered while reading cursor report. Read so far: ~S" (coerce (nreverse (copy-list response-chars)) 'string))
-                (return)) ; Exit loop
-              ;; ((null char) ; No character available right now
-              ;;  (sleep 0.01))
-                                        ; Wait a bit (10ms) and retry
-              (t ; Character read
-                (push char response-chars)
-                (when (= char (char-code #\R))
-                  (setq response-str (coerce (mapcar #'code-char (nreverse response-chars)) 'string))
-                  (log:debug "Cursor report full response read: ~S" response-str)
-                  (return)))))))) ; Exit loop, proceed to parse
+          (cond
+            ((listen stream)
+             (let ((char (read-byte stream nil :eof)))
+               (cond
+                 ((eq char :eof)
+                  (log:warn "EOF encountered while reading cursor report. Read so far: ~S" (coerce (nreverse (copy-list response-chars)) 'string))
+                  (return)) ; Exit loop
+                 (t ; Character read
+                  (push char response-chars)
+                  (when (= char (char-code #\R))
+                    (setq response-str (coerce (mapcar #'code-char (nreverse response-chars)) 'string))
+                    (log:debug "Cursor report full response read: ~S" response-str)
+                    (return))))))
+            (t
+             (sleep 0.01)))))) ; Exit loop, proceed to parse
 
     ;; Always restore cursor, regardless of whether we got a response
     (with-terminal-lock (instance)

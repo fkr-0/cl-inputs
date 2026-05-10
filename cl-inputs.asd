@@ -2,7 +2,7 @@
 (asdf:defsystem "cl-inputs"
   :description "Terminal input decoding (pure), device port, and sink port."
   :license "MIT" :version "0.1.0"
-  :author "Kilo Code"
+  :author "cbadger"
   :depends-on (#:alexandria #:uiop #:bordeaux-threads #:sb-posix
                 #:log4cl)
   :components
@@ -23,14 +23,5 @@
     (:file "src/input/loop" :depends-on ("src/input/device/device-api" "src/input/decoder" "src/input/sink"))
     (:file "src/input/api" :depends-on ("src/input/loop"))
     (:file "src/input/package" :depends-on ("src/terminal/api")))
-  :in-order-to ((asdf:test-op (asdf:test-op "cl-inputs/tests"))))
 
-(asdf:defsystem "cl-inputs/tests"
-  :description "Test suite for cl-inputs."
-  :author "Kilo Code"
-  :license "MIT"
-  :depends-on ("cl-inputs" "fiveam")
-  :components ((:module "tests"
-                 :components
-                 ((:file "main")))))
-;;  :perform (asdf:test-op (op c) (asdf:symbol-call :cl-inputs.tests '#:run!)))
+  :in-order-to ((asdf:test-op (asdf:test-op "cl-inputs/tests"))))

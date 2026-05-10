@@ -28,18 +28,14 @@ parse_docstring() {
 
 exe_tests() {
   # run tests
-  ros run -- --load ~/.sbclrc --load run-tests-clpm.lisp --non-interactive
+  # ros run -- --load ~/.sbclrc --load run-tests-clpm-input.lisp --non-interactive
 
+  clpm bundle exec --with-client sbcl -- --noinform --load run-tests-clpm-input.lisp --non-interactive
 }
 
 exe_slynk() {
   # run slynk
   ros run --load ~/.sbclrc --load slynk-run.lisp
-}
-
-exe_run() {
-  # run tests
-  ros run --load ~/.sbclrc --load run.lisp
 }
 
 exe_format() {
