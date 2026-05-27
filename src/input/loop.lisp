@@ -38,6 +38,11 @@
 
 (in-package :cl-inputs.loop)
 
+(defun %validate-timeout (timeout)
+  (unless (or (null timeout) (and (numberp timeout) (not (minusp timeout))))
+    (error "Timeout must be NIL or a non-negative number, got ~S" timeout))
+  timeout)
+
 ;; (defstruct input-loop dev thread stop? decoder sink)
 
 (defstruct input-loop

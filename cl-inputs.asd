@@ -4,7 +4,7 @@
   :license "MIT" :version "0.1.0"
   :author "cbadger"
   :depends-on (#:alexandria #:uiop #:bordeaux-threads #:sb-posix
-                #:log4cl)
+                #:log4cl #:cl-events)
   :components
   ((:file "src/input/util")
     (:file "src/input/tokens")

@@ -41,6 +41,9 @@
 
 
 (in-package :cl-inputs.device.api)
+
+(defun %unsupported-device-operation (operation dev)
+  (error 'device-error :device dev :reason (format nil "Unsupported device operation ~A for ~S" operation dev)))
 (defgeneric disable-raw-char-mode (dev))
 ;; (defgeneric get-terminal-size (dev)
 ;;   (:documentation "Return (values rows cols) for DEV."))
@@ -129,7 +132,7 @@ Extension Point:
 
 Side Effects:
   None by default."
-  dev)
+  (%unsupported-device-operation 'open-device dev))
 
 (defmethod close-device ((dev t))
   "Default fallback for CLOSE-DEVICE. Returns T.
@@ -140,7 +143,7 @@ Extension Point:
 
 Side Effects:
   None by default."
-  (declare (ignore dev)) t)
+  (%unsupported-device-operation 'close-device dev))
 
 (defmethod enable-raw-mode ((dev t))
   "Default fallback for ENABLE-RAW-MODE. Returns T.
@@ -151,7 +154,7 @@ Extension Point:
 
 Side Effects:
   None by default."
-  (declare (ignore dev)) t)
+  (%unsupported-device-operation 'enable-raw-mode dev))
 
 (defmethod disable-raw-mode ((dev t))
   "Default fallback for DISABLE-RAW-MODE. Returns T.
@@ -162,7 +165,7 @@ Extension Point:
 
 Side Effects:
   None by default."
-  (declare (ignore dev)) t)
+  (%unsupported-device-operation 'disable-raw-mode dev))
 
 (defmethod device-read-bytes ((dev t) buffer start end)
   "Default fallback for DEVICE-READ-BYTES. Returns :EOF.
@@ -182,8 +185,8 @@ Return Value:
 
 Side Effects:
   None by default."
-  (declare (ignore dev buffer start end))
-  :eof)
+  (declare (ignore buffer start end))
+  (%unsupported-device-operation 'device-read-bytes dev))
 
 (defmethod device-write-bytes ((dev t) buffer start end)
   "Default fallback for DEVICE-WRITE-BYTES. Returns 0.
@@ -203,19 +206,20 @@ Return Value:
 
 Side Effects:
   None by default."
-  (declare (ignore dev buffer start end)) 0)
+  (declare (ignore buffer start end))
+  (%unsupported-device-operation 'device-write-bytes dev))
 
 (defmethod device-input-stream ((dev t))
   "Default fallback for DEVICE-INPUT-STREAM. Returns NIL."
-  (declare (ignore dev)) nil)
+  (%unsupported-device-operation 'device-input-stream dev))
 
 (defmethod device-output-stream ((dev t))
   "Default fallback for DEVICE-OUTPUT-STREAM. Returns NIL."
-  (declare (ignore dev)) nil)
+  (%unsupported-device-operation 'device-output-stream dev))
 
 (defmethod device-fd ((dev t))
   "Default fallback for DEVICE-FD. Returns NIL."
-  (declare (ignore dev)) nil)
+  (%unsupported-device-operation 'device-fd dev))
 
 (defmethod device-capabilities ((dev t))
   "Default fallback for DEVICE-CAPABILITIES. Returns NIL.
@@ -232,7 +236,7 @@ Return Value:
 
 Side Effects:
   None by default."
-  (declare (ignore dev)) nil)
+  (%unsupported-device-operation 'device-capabilities dev))
 
 (defmethod device-set-modes ((dev t) modes)
   "Default fallback for DEVICE-SET-MODES. Returns T.
@@ -250,7 +254,8 @@ Return Value:
 
 Side Effects:
   None by default."
-  (declare (ignore dev modes)) t)
+  (declare (ignore modes))
+  (%unsupported-device-operation 'device-set-modes dev))
 ;; ;; == cl-inputs/src/device/protocol.lisp ==
 ;; (uiop:define-package :cl-inputs.device.protocol
 ;;   (:use :cl :alexandria)

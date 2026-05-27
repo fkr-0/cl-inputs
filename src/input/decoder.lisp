@@ -187,8 +187,9 @@
                     (append (when (logbitp 0 m) '(:shift))
                       (when (logbitp 1 m) '(:alt))
                       (when (logbitp 2 m) '(:control))))))
-    (cl-inputs.tokens:make-token
-      :mouse `(:type ,etype :x ,(1- cx) :y ,(1- cy) :button ,button :mods ,mods) timestamp)))
+    (when (and (integerp cx) (integerp cy) (plusp cx) (plusp cy))
+      (cl-inputs.tokens:make-token
+        :mouse `(:type ,etype :x ,(1- cx) :y ,(1- cy) :button ,button :mods ,mods) timestamp))))
 
 (defun decode-chunk (decoder octet-vector &key (timestamp (get-universal-time)))
   "Pure step: consume OCTET-VECTOR (u8 vector), produce (values TOKENS NEW-DECODER).

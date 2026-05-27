@@ -8,7 +8,7 @@
     ;; Sink port (generics; defaults are NO-OP)
     #:accept-token #:on-key #:on-mouse #:on-resize #:on-paste #:on-focus #:on-ctrl-c
     ;; Helpers for composing sinks:
-    #:tee-sink #:fn-sink))
+    #:tee-sink #:fn-sink #:event-bus-sink #:token->event))
 (in-package :cl-inputs.sink)
 
 (defgeneric accept-token (sink token)
@@ -58,3 +58,17 @@ Default implementation is a no-op. Override for custom sink behavior."))
       (cond
         ((functionp s) (funcall s token))
         (t (accept-token s token))))))
+
+
+(defun token->event (token)
+  "Convert an input TOKEN into a cl-events EVENT for bus delivery."
+  (cl-events.types:make-event
+   :type (cl-inputs.tokens:input-token-kind token)
+   :data token))
+
+(defun event-bus-sink (bus &key (topic :input/token))
+  "Return a sink function that publishes input tokens to BUS under TOPIC."
+  (lambda (token)
+    (cl-events.bus:publish-event
+     bus
+     (cl-events.types:make-event :type topic :data (token->event token)))))
