@@ -511,9 +511,11 @@ Fields:
   DEV     -- device object (type: device)
   DECODER -- decoder state (type: decoder)
   BUF     -- buffer for input bytes (type: (array (unsigned-byte 8) *))
+  PENDING-TOKENS -- buffered tokens from a previous decode-chunk call
 
 All fields are required."
-  dev decoder buf)
+  dev decoder buf
+  (pending-tokens nil :type list))
 
 (defmethod print-object ((src input-source) stream)
   (format stream "#<INPUT-SOURCE dev=~A decoder=~A buf-size=~A>"
@@ -537,31 +539,28 @@ All fields are required."
     (setf *default-input-source* src)
     src))
 
-;; override array printer
-(defmethod print-object ((arr array) stream)
-  ;; prevent recursive printing while printing arr
+;; override array printer for byte buffers only
+(defun %print-ub8-array (arr stream)
   (let ((*print-readably* nil)
          (*print-level* nil)
          (*print-length* nil))
-    ;; Detect element type if you want different behaviours
-    (cond
-      ((equal (array-element-type arr) '(unsigned-byte 8))
-        (format stream "#<UB8 ~D bytes: "
-          (array-total-size arr))
-        ;; print first few bytes as hex
-        (let ((limit (min 16 (array-total-size arr))))
-          (dotimes (i limit)
-            (format stream "~2,'0X " (aref arr i))))
-        (when (> (array-total-size arr) 16)
-          (format stream "..."))
-        (format stream ">"))
-      (t
-        ;; fallback to default
-        (call-next-method)))))
+    (format stream "#<UB8 ~D bytes: "
+      (length arr))
+    (let ((limit (min 16 (length arr))))
+      (dotimes (i limit)
+        (format stream "~2,'0X " (aref arr i))))
+    (when (> (length arr) 16)
+      (format stream "..."))
+    (format stream ">")))
 
 
 (defun next-token (src &key timeout)
   "Blocking read (or timed if DEVICE supports it). Returns a token or NIL on EOF."
+  ;; Drain any tokens buffered from a previous read first
+  (let ((pending (input-source-pending-tokens src)))
+    (when pending
+      (setf (input-source-pending-tokens src) (rest pending))
+      (return-from next-token (first pending))))
   (let* ((dev (input-source-dev src))
           (buf (input-source-buf src)))
     (when (and dev (numberp timeout))
@@ -576,6 +575,8 @@ All fields are required."
             (cl-inputs.decoder:decode-chunk (input-source-decoder src)
               (subseq buf 0 n))
             (setf (input-source-decoder src) dec2)
+            (when (rest tokens)
+              (setf (input-source-pending-tokens src) (rest tokens)))
             (first tokens)))))))
 
 (defun close-input-source (src)

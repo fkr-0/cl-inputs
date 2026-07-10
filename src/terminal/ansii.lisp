@@ -732,8 +732,14 @@
                (t (format s "<0x~2,'0X>" code)))))))
 
   (defun normalize-key-symbol (code)
-    "Turn CODE from a cl-inputs key token into a keyword."
+    "Turn CODE from a cl-inputs key token into a keyword.
+
+Missing key codes are normalized to :UNKNOWN instead of preserving NIL as a
+symbol. Downstream event constructors require key identifiers to be keywords
+(or characters in older paths), so returning NIL turns a recoverable partial
+input token into a type error."
     (cond
+      ((null code) :unknown)
       ((keywordp code) code)
       ((characterp code) (intern (string-upcase (string code)) :keyword))
       ((symbolp code) code)
