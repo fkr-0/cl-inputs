@@ -29,7 +29,7 @@
 
 (test string-to-utf-8-bytes-unicode
   "Test converting Unicode string to UTF-8 bytes"
-  (let* ((str (string #\lambda)) ;; λ needs 2 bytes in UTF-8
+  (let* ((str (string (code-char #x03BB))) ;; λ needs 2 bytes in UTF-8
           (bytes (string-to-utf-8-bytes str)))
     (is (= 2 (length bytes)))
     (is (= 206 (aref bytes 0)))

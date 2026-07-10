@@ -2,6 +2,7 @@
   (:use :cl :fiveam)
   (:import-from :cl-inputs.escape
                 #:csi-final-byte-p #:decode-csi-to-token)
+  (:import-from :cl-inputs.util #:string-to-utf-8-bytes)
   (:export #:escape-tests))
 
 (in-package :cl-inputs.tests.escape)
@@ -30,6 +31,7 @@
 
 (test decode-csi-to-token-default
   "Test that decode-csi-to-token returns NIL by default"
-  (let* ((bytes (string-to-utf-8-bytes "^[A"))
+  (let* ((bytes (string-to-utf-8-bytes
+                 (concatenate 'string (string #\Esc) "[A")))
           (result (decode-csi-to-token bytes)))
     (is (null result))))

@@ -1,28 +1,23 @@
 (uiop:define-package :cl-inputs.tests.loop
   (:use :cl :fiveam)
-  (:import-from :cl-inputs.loop
-                #:input-source #:input-source-device #:input-source-sink
-                #:poll-once)
+  (:import-from :cl-inputs.loop #:make-input-source #:next-token #:close-input-source)
   (:import-from :cl-inputs.device.api #:make-device)
-  (:import-from :cl-inputs.tokens #:make-token)
+  (:import-from :cl-inputs.tokens #:input-token-data)
+  (:import-from :cl-inputs.util #:string-to-utf-8-bytes)
   (:export #:loop-tests))
 
 (in-package :cl-inputs.tests.loop)
 
-(def-suite loop-tests
-  :description "Tests for cl-inputs.loop module"
-  :in :cl-inputs)
-
+(def-suite loop-tests :description "Tests for pull-mode input sources" :in :cl-inputs)
 (in-suite loop-tests)
 
-(test make-input-source-from-device
-  "Test creating an input source from device"
-  (let ((dev (make-device :faketerm))
-        (src (input-source-device (make-device :faketerm))))
-    (is (listp src))))
-
-(test poll-once-no-data
-  "Test poll-once with no data returns NIL"
-  (let ((dev (make-device :faketerm))
-        (src (input-source-device dev)))
-    (is (null (poll-once src)))))
+(test input-source-drains-decoded-token-buffer
+  (let* ((device (make-device :faketerm
+                              :script (list (string-to-utf-8-bytes "xy"))))
+         (source (make-input-source :device device)))
+    (unwind-protect
+         (progn
+           (is (char= #\x (getf (input-token-data (next-token source)) :code)))
+           (is (char= #\y (getf (input-token-data (next-token source)) :code)))
+           (is (null (next-token source :timeout 0))))
+      (is-true (close-input-source source)))))

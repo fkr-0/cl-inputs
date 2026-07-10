@@ -13,6 +13,10 @@
 
 (in-suite decoder-tests)
 
+(defun escape-bytes (suffix)
+  (string-to-utf-8-bytes
+   (concatenate 'string (string #\Esc) suffix)))
+
 (test make-decoder-default
   "Test creating a default decoder"
   (let ((dec (make-decoder)))
@@ -42,7 +46,7 @@
 (test decode-esc-sequence
   "Test decoding ESC [ A (up arrow)"
   (let* ((dec (make-decoder))
-          (bytes (string-to-utf-8-bytes "^[A"))
+          (bytes (escape-bytes "[A"))
           (tokens (nth-value 0 (decode-chunk dec bytes))))
     (is (= 1 (length tokens)))
     (is (eq :up (getf (input-token-data (first tokens)) :code)))))
@@ -79,7 +83,6 @@
           ;; First call sends ESC without the rest
           (bytes1 (make-array 1 :element-type '(unsigned-byte 8)
                                :initial-contents (list 27)))
-          (_ (decode-chunk dec bytes1))
           (new-dec (nth-value 1 (decode-chunk dec bytes1)))
           ;; Second call completes the sequence
           (bytes2 (string-to-utf-8-bytes "[A"))

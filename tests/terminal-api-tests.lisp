@@ -57,4 +57,4 @@
     (hide-cursor dev)
     (is (null (cl-inputs.device.faketerm::faketerm-device-cursor-visible-p dev)))
     (show-cursor dev)
-    (is (true (cl-inputs.device.faketerm::faketerm-device-cursor-visible-p dev)))))
+    (is-true (cl-inputs.device.faketerm::faketerm-device-cursor-visible-p dev))))

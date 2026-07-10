@@ -1,6 +1,8 @@
 (uiop:define-package :cl-inputs.tests.integration
   (:use :cl :fiveam)
-  (:import-from :cl-inputs.api #:make-input #:input-process)
+  (:import-from :cl-inputs.api #:make-ready-input-source)
+  (:import-from :cl-inputs.loop #:next-token #:close-input-source)
+  (:import-from :cl-inputs.device.api #:make-device)
   (:import-from :cl-inputs.decoder #:make-decoder)
   (:import-from :cl-inputs.tokens #:input-token-kind)
   (:import-from :cl-inputs.util #:string-to-utf-8-bytes)
@@ -13,6 +15,10 @@
   :in :cl-inputs)
 
 (in-suite integration-tests)
+
+(defun escape-bytes (suffix)
+  (string-to-utf-8-bytes
+   (concatenate 'string (string #\Esc) suffix)))
 
 (test decode-key-press
   "Test integration: decode a key press from bytes to token"
@@ -27,7 +33,7 @@
 (test decode-escape-sequence
   "Test integration: decode ESC sequence to key token"
   (let ((decoder (make-decoder))
-        (bytes (string-to-utf-8-bytes "^[C"))) ;; Right arrow
+        (bytes (escape-bytes "[C"))) ;; Right arrow
     (multiple-value-bind (tokens new-dec) (cl-inputs.decoder:decode-chunk decoder bytes)
       (declare (ignore new-dec))
       (is (= 1 (length tokens)))
@@ -45,8 +51,11 @@
 
 (test roundtrip-api
   "Test integration: roundtrip through API"
-  (let ((inp (make-input :backend :faketerm))
-        (bytes (string-to-utf-8-bytes "X")))
-    (is (listp inp))
-    ;; Just verify the structure is set up correctly
-    (is (getf inp :device))))
+  (let* ((device (make-device :faketerm
+                              :script (list (string-to-utf-8-bytes "X"))))
+         (source (make-ready-input-source :device device)))
+    (unwind-protect
+         (is (eq #\X
+                 (getf (cl-inputs.tokens:input-token-data (next-token source))
+                       :code)))
+      (is-true (close-input-source source)))))

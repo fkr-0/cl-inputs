@@ -23,17 +23,17 @@
   "Test opening and closing faketerm device"
   (let ((dev (make-device :faketerm)))
     (is (eq dev (open-device dev)))
-    (is (true (close-device dev)))))
+    (is-true (close-device dev))))
 
 (test enable-raw-mode-faketerm
   "Test enabling raw mode on faketerm"
   (let ((dev (make-device :faketerm)))
-    (is (true (enable-raw-mode dev)))
-    (is (true (disable-raw-mode dev)))))
+    (is-true (enable-raw-mode dev))
+    (is-true (disable-raw-mode dev))))
 
 (test device-capabilities-faketerm
   "Test getting device capabilities from faketerm"
   (let* ((dev (make-device :faketerm))
           (caps (device-capabilities dev)))
     (is (listp caps))
-    (is (true (getf caps :truecolor)))))
+    (is-true (getf caps :truecolor))))

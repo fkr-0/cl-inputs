@@ -4,14 +4,13 @@
   (:import-from :cl-inputs.tokens
                 #:input-token #:make-token #:input-token-kind #:input-token-data
                 #:input-token-ts #:+k-key+ #:+k-mouse+ #:+k-resize+ #:+k-paste+ #:+k-focus+)
-  (:import-from :cl-inputs.tests #:cl-inputs-test)
   (:export #:tokens-tests))
 
 (in-package :cl-inputs.tests.tokens)
 
 (def-suite tokens-tests
   :description "Tests for cl-inputs.tokens module"
-  :in cl-inputs-test)
+  :in :cl-inputs)
 
 (in-suite tokens-tests)
 
@@ -50,8 +49,8 @@
   (let ((tok (make-token :key '(:code :a :shift t :ctrl t))))
     (is (eq :key (input-token-kind tok)))
     (is (eq :a (getf (input-token-data tok) :code)))
-    (is (true (getf (input-token-data tok) :shift)))
-    (is (true (getf (input-token-data tok) :ctrl)))))
+    (is-true (getf (input-token-data tok) :shift))
+    (is-true (getf (input-token-data tok) :ctrl))))
 
 (test make-mouse-token-with-position
   "Test creating mouse token with coordinates"
@@ -79,6 +78,6 @@
   (let ((tok-gained (make-token :focus '(:gained t)))
         (tok-lost (make-token :focus '(:gained nil))))
     (is (eq :focus (input-token-kind tok-gained)))
-    (is (true (getf (input-token-data tok-gained) :gained)))
+    (is-true (getf (input-token-data tok-gained) :gained))
     (is (eq :focus (input-token-kind tok-lost)))
-    (is (false (getf (input-token-data tok-lost) :gained)))))
+    (is-false (getf (input-token-data tok-lost) :gained))))

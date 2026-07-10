@@ -7,14 +7,13 @@
                 #:accept-token #:on-key #:on-mouse #:on-resize
                 #:on-paste #:on-focus #:on-ctrl-c
                 #:fn-sink #:tee-sink)
-  (:import-from :cl-inputs.tests #:cl-inputs-test)
   (:export #:sink-tests))
 
 (in-package :cl-inputs.tests.sink)
 
 (def-suite sink-tests
   :description "Tests for cl-inputs.sink module"
-  :in cl-inputs-test)
+  :in :cl-inputs)
 
 (in-suite sink-tests)
 

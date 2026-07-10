@@ -9,7 +9,6 @@
 
 (defparameter *default-keymap*
   `( (,(mapcar #'char-code '(#\Esc #\[ #\A)) :up)
-     (,(mapcar #'char-code '(#\Esc #\[ #\A)) :up)
      (,(mapcar #'char-code '(#\Esc #\[ #\B)) :down)
      (,(mapcar #'char-code '(#\Esc #\[ #\C)) :right)
      (,(mapcar #'char-code '(#\Esc #\[ #\D)) :left)
@@ -34,7 +33,10 @@
      (,(mapcar #'char-code '(#\Esc #\[ #\2 #\0 #\~)) :f9)
      (,(mapcar #'char-code '(#\Esc #\[ #\2 #\1 #\~)) :f10)
      (,(mapcar #'char-code '(#\Esc #\[ #\2 #\3 #\~)) :f11)
-     (,(mapcar #'char-code '(#\Esc #\[ #\2 #\4 #\~)) :f12))
+     (,(mapcar #'char-code '(#\Esc #\[ #\2 #\4 #\~)) :f12)
+     ;; Common alternate Home/End encodings.
+     (,(mapcar #'char-code '(#\Esc #\[ #\H)) :home)
+     (,(mapcar #'char-code '(#\Esc #\[ #\F)) :end))
   "Default keymap: maps common escape sequences to symbolic key names.
 Extend this table to support additional keys or custom layouts."
   )
@@ -48,12 +50,24 @@ Returns NIL if no match is found."
                  :test #'equal)))
     (and match (second match))))
 
+(defun %character-key-name (char)
+  (case char
+    (#\Space "SPACE")
+    (#\: "COLON")
+    (#\Tab "TAB")
+    (#\Return "ENTER")
+    (#\Backspace "BACKSPACE")
+    (#\Esc "ESCAPE")
+    (otherwise (string-upcase (string char)))))
+
 (defun canonicalize-key (char &key ctrl alt shift)
-  "Convert CHAR and modifier flags into a canonical key symbol.
-If CTRL is true and CHAR is a control character, returns a :C-<char> keyword.
-Otherwise, returns an uppercase keyword for the character."
-  (declare (ignore alt shift))
-  (cond
-    ((and ctrl (<= (char-code char) 31))
-      (intern (format nil "C-~A" (code-char (+ 64 (char-code char)))) :keyword))
-    (t (intern (string-upcase (string char)) :keyword))))
+  "Return a stable keyword for CHAR and its modifier flags.
+
+Modifiers use the conventional C-/M-/S- prefixes, in that order.  For
+example, Control+Alt+Shift+A becomes :C-M-S-A."
+  (check-type char character)
+  (let ((parts (append (when ctrl '("C"))
+                       (when alt '("M"))
+                       (when shift '("S"))
+                       (list (%character-key-name char)))))
+    (intern (format nil "~{~A~^-~}" parts) :keyword)))
