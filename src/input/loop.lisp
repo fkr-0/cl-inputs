@@ -43,7 +43,6 @@
     (error "Timeout must be NIL or a non-negative number, got ~S" timeout))
   timeout)
 
-;; (defstruct input-loop dev thread stop? decoder sink)
 
 (defstruct input-loop
   "State for a running input loop.
@@ -96,219 +95,9 @@ Side Effects:
         (:focus  (on-focus sink token))))))
 
 
-;; (defun start-input-loop (&key (device (cl-inputs.device.api:make-device :tty))
-;;                           (sink (fn-sink
-;;                                   (lambda (_tok)
-;;                                     (declare (ignore _tok)) nil)))
-;;                           (decoder (cl-inputs.decoder:make-decoder)))
-;;   "Reads from DEVICE, decodes via DECODER, pushes to SINK. Returns an INPUT-LOOP handle."
-;;   (cl-inputs.device.api:enable-raw-mode device)
-;;   (let ((in-loop (make-input-loop :dev device :sink sink :decoder decoder)))
-;;     (setf (input-loop-thread in-loop)
-;;       (bt:make-thread
-;;         (lambda ()
-;;           (let ((buf (make-array 64 :element-type '(unsigned-byte 8))))
-;;             (unwind-protect
-;;               (loop until (input-loop-stop? in-loop) do
-;;                 (let ((n (cl-inputs.device.api:device-read-bytes device buf 0 (length buf))))
-;;                   (when (or (eql n :eof) (null n)) (return))
-;;                   (multiple-value-bind (tokens dec2)
-;;                     (cl-inputs.decoder:decode-chunk (input-loop-decoder in-loop)
-;;                       (subseq buf 0 n))
-;;                     (log-debug "Decoded ~A tokens from ~A bytes" (length tokens) n)
-;;                     (setf (input-loop-decoder in-loop) dec2)
-;;                     (dolist (to tokens) (%deliver (input-loop-sink in-loop) to)))))
-;;               (cl-inputs.device.api:disable-raw-mode device))))
-;;         :name "cl-inputs.loop"))
-;;     in-loop))
-
-
-
-;; == cl-inputs/src/input-loop.lisp ==
-;; (in-package :cl-inputs)
-
-;;; NOTE:
-;;; - Expects these accessors on IN-LOOP: INPUT-LOOP-DEV, INPUT-LOOP-DECODER,
-;;;   INPUT-LOOP-SINK, INPUT-LOOP-STOP?, INPUT-LOOP-LAST-OUTPUT,
-;;;   INPUT-LOOP-CONDITION (bt:condition-variable),
-;;;   INPUT-LOOP-CONDITION-LOCK (bt:lock)  ; <-- if you currently only have a condition,
-;;;                                        ;     add a dedicated lock in your loop struct.
-;;;
-;;; - DEVICE API contract (must be true for consistency):
-;;;   cl-inputs.device.api:device-read-bytes returns:
-;;;     * a non-negative integer N = number of octets read,
-;;;     * 0 when nonblocking/EAGAIN (no data right now),
-;;;     * :EOF (keyword) on end-of-file / hangup,
-;;;     * may signal ERROR on hard failures (we catch & log).
-;;;
-;;; - DECODER contract:
-;;;   (cl-inputs.decoder:decode-chunk DEC (u8-vector)) => (values tokens new-decoder)
-
-;; (defun input-loop-main (in-loop &key (sync nil) (bufsize 1) (idle-sleep 0.005))
-;;   "Main loop for reading, decoding, and delivering input.
-;; If SYNC is true, signal a condition variable after each delivered token.
-;; BUFSIZE controls raw read size; IDLE-SLEEP throttles the loop on EAGAIN."
-;;   (let* ((device  (input-loop-dev in-loop))
-;;           (decoder (or (input-loop-decoder in-loop)
-;;                      (cl-inputs.decoder:make-decoder)))
-;;           ;; Raw octet buffer reused per iteration
-;;           (buf     (make-array bufsize :element-type '(unsigned-byte 8))))
-;;     (log-info "Input loop started on device ~A (sync: ~A, bufsize: ~A)" device sync bufsize)
-;;     (unwind-protect
-;;       (handler-case
-;;         (loop until (input-loop-stop? in-loop) do
-;;           (progn
-;;             (log-info "Input loop iteration on device ~A" device)
-;;             (let ((n (cl-inputs.device.api:device-read-bytes device buf 0 bufsize)))
-;;               (log-info "Read ~A from device ~A" n device)
-;;               (cond
-;;                 ;; EOF / hangup → exit loop cleanly
-;;                 ((or (eql n :eof) (null n))
-;;                   (log-warn "Input loop: device returned ~A — terminating." n)
-;;                   (return))
-
-;;                 ;; No bytes (nonblocking EAGAIN) → brief idle to avoid busy spin
-;;                 ((and (integerp n) (zerop n))
-;;                   (when (plusp idle-sleep) (sleep idle-sleep)))
-
-;;                 ;; Received N bytes → decode and deliver tokens
-;;                 ((and (integerp n) (> n 0))
-;;                   ;; Slice the buffer to the bytes actually read, pass to pure decoder.
-;;                   (multiple-value-bind (tokens dec2)
-;;                     (cl-inputs.decoder:decode-chunk decoder (subseq buf 0 n))
-;;                     (setf decoder dec2
-;;                       (input-loop-decoder in-loop) dec2)
-;;                     (log-debug "Decoded ~A tokens from ~A bytes" (length tokens) n)
-;;                     (dolist (tok tokens)
-;;                       (setf (input-loop-last-output in-loop) tok)
-;;                       (log-debug "Delivering token ~A" tok)
-;;                       (%deliver (input-loop-sink in-loop) tok)
-;;                       (when sync
-;;                         ;; Prefer signaling under a lock. If your loop struct doesn’t yet carry
-;;                         ;; a lock, add INPUT-LOOP-CONDITION-LOCK and use it here.
-;;                         (log-info "Signaling condition variable for token ~A" tok)
-;;                         (let ((cond (input-loop-condition in-loop))
-;;                                (lock (ignore-errors (input-loop-condition-lock in-loop))))
-;;                           (if lock
-;;                             (bt:with-lock-held (lock)
-;;                               (bt:condition-notify cond))
-;;                             ;; Fallback: notify without lock (works on some impls but less robust).
-;;                             (bt:condition-notify cond)))))))
-
-;;                 ;; Unexpected return → log & continue (defensive)
-;;                 (t
-;;                   (log-warn "Input loop: unexpected read result ~S" n))))))
-;;         (error (e)
-;;           (log-error "Input loop error: ~A" e)))
-;;       ;; Always leave raw mode off on exit.
-;;       (cl-inputs.device.api:disable-raw-mode device))))
-;; == end/input-loop.lisp ==
-
-;; == cl-inputs/src/input-loop.lisp ==
-
-;; Expect these accessors on IN-LOOP object:
-;;   INPUT-LOOP-DEV
-;;   INPUT-LOOP-DECODER
-;;   INPUT-LOOP-SINK
-;;   INPUT-LOOP-STOP?
-;;   INPUT-LOOP-LAST-OUTPUT
-;;   INPUT-LOOP-CONDITION (optional)
-;;   INPUT-LOOP-CONDITION-LOCK (optional)
-
-;; (defun %maybe-signal (in-loop)
-;;   (let ((cond (ignore-errors (slot-value in-loop 'condition)))
-;;          (lock (ignore-errors (slot-value in-loop 'condition-lock))))
-;;     (when cond
-;;       (if lock
-;;         (bt:with-lock-held (lock) (bt:condition-notify cond))
-;;         (bt:condition-notify cond)))))
-
-;; (defun input-loop-main (in-loop &key (sync nil) (poll-timeout-ms 200))
-;;   "Blocking loop using device-wait-readable (SB-SYS:WAIT-UNTIL-FD-USABLE on SBCL).
-;;    VMIN=1/VTIME=0 makes buffer size irrelevant to latency."
-;;   (let* ((dev     (input-loop-dev in-loop))
-;;           (decoder (or (input-loop-decoder in-loop) (make-decoder)))
-;;           (buf     (make-array 2048 :element-type '(unsigned-byte 8))))
-;;     (log-info "Input loop starting on ~A" (device-kind dev))
-;;     (unwind-protect
-;;       (handler-case
-;;         (progn
-;;           (open-device dev)
-;;           (with-raw-char-mode (dev :vmin 1 :vtime 0 :canonical nil :echo nil :isig t)
-;;             (device-set-nonblocking dev t)
-;;             (loop until (input-loop-stop? in-loop) do
-;;               (when (device-wait-readable dev poll-timeout-ms)
-;;                 (let ((n (device-read-bytes dev buf 0 (length buf))))
-;;                   (cond
-;;                     ((eql n :eof) (log-warn "EOF on input device.") (return))
-;;                     ((= n 0)      nil) ; spurious wake
-;;                     (t
-;;                       (multiple-value-bind (tokens dec2)
-;;                         (decode-chunk decoder (subseq buf 0 n))
-;;                         (setf decoder dec2 (input-loop-decoder in-loop) dec2)
-;;                         (dolist (tok tokens)
-;;                           (setf (input-loop-last-output in-loop) tok)
-;;                           (%deliver (input-loop-sink in-loop) tok)
-;;                           (when sync
-;;                             (let ((cond (ignore-errors (slot-value in-loop 'condition)))
-;;                                    (lock (ignore-errors (slot-value in-loop 'condition-lock))))
-;;                               (if lock
-;;                                 (bt:with-lock-held (lock) (bt:condition-notify cond))
-;;                                 (when cond (bt:condition-notify cond))))))))))))))
-;;         (error (e) (log-error "Input loop error: ~A" e)))
-;;       (ignore-errors (device-set-nonblocking dev nil))
-;;       (ignore-errors (disable-raw-char-mode dev))
-;;       (ignore-errors (close-device dev))
-;;       (log-info "Input loop exited."))))
-;; (defun input-loop-main (in-loop &key (sync nil) (poll-timeout-ms 200))
-;;   "Blocking loop: waits with poll/select for readability → reads octets → decodes → delivers tokens.
-;; Poll timeout keeps the loop responsive to stop flags.
-;; Buffer size is internal and irrelevant to latency thanks to VMIN=1.
-;; Idempotent raw-mode handling and nonblocking I/O are set internally."
-;;   (let* ((dev     (input-loop-dev in-loop))
-;;           (decoder (or (input-loop-decoder in-loop) (make-decoder)))
-;;           ;; internal buffer only caps max chunk size when burst data is present (paste/resize)
-;;           (buf     (make-array 2048 :element-type '(unsigned-byte 8))))
-;;     (log-info "Input loop starting on ~A" (device-kind dev))
-;;     (unwind-protect
-;;       (handler-case
-;;         (progn
-;;           ;; Ensure device open + raw per-byte readiness + nonblocking read
-;;           (open-device dev)
-;;           (with-raw-char-mode (dev :vmin 1 :vtime 0 :canonical nil :echo nil :isig t)
-;;             (device-set-nonblocking dev t)
-;;             (loop until (input-loop-stop? in-loop) do
-;;               ;; Wait until readable; timeout allows checking stop? and other duties.
-;;               (when (device-wait-readable dev poll-timeout-ms)
-;;                 (let ((n (device-read-bytes dev buf 0 (length buf))))
-;;                   (cond
-;;                     ((eql n :eof)
-;;                       (log-warn "EOF on input device; terminating input loop.")
-;;                       (return))
-;;                     ((= n 0)
-;;                       ;; nonblocking and no data; loop again
-;;                       nil)
-;;                     (t
-;;                       (multiple-value-bind (tokens dec2)
-;;                         (decode-chunk decoder (subseq buf 0 n))
-;;                         (setf decoder dec2
-;;                           (input-loop-decoder in-loop) dec2)
-;;                         (when (plusp (length tokens))
-;;                           (log-debug "Decoded ~D token(s) from ~D byte(s)" (length tokens) n))
-;;                         (dolist (tok tokens)
-;;                           (setf (input-loop-last-output in-loop) tok)
-;;                           (%deliver (input-loop-sink in-loop) tok)
-;;                           (when sync (%maybe-signal in-loop)))))))))))
-;;         (error (e)
-;;           (log-error "Input loop error: ~A" e)))
-;;       ;; restore device modes idempotently; safe even if already restored
-;;       (ignore-errors (device-set-nonblocking dev nil))
-;;       (ignore-errors (disable-raw-char-mode dev))
-;;       (ignore-errors (close-device dev))
-;;       (log-info "Input loop exited."))))
-;; == end/input-loop.lisp ==
-;; == cl-inputs/src/input-loop.lisp ==
-;; == cl-inputs/src/input-loop.lisp ==
+;;; INPUT-LOOP-MAIN owns device reads, decoder progression, token delivery,
+;;; and optional synchronous notification. Historical draft implementations
+;;; are intentionally omitted; tests define the maintained behavior.
 
 (defun %maybe-signal (in-loop)
   "Safely notify a condition variable in the given IN-LOOP object.
@@ -343,10 +132,10 @@ even when the presence of synchronization primitives is not guaranteed."
     (unwind-protect
       (progn
         (open-device dev)
-        (device-set-nonblocking dev nil) ; blocking is fine + simpler with VMIN=1  :contentReference[oaicite:6]{index=6}
+        (device-set-nonblocking dev nil) ; blocking mode plus VMIN=1 keeps first-byte latency explicit
         (with-raw-char-mode (dev :vmin 1 :vtime 0 :canonical nil :echo nil :isig t)
           (loop until (input-loop-stop? in-loop) do
-            (when (device-wait-readable dev wait-timeout-ms) ; sleep until readable  :contentReference[oaicite:7]{index=7}
+            (when (device-wait-readable dev wait-timeout-ms) ; bounded wait keeps stop checks responsive
               (let ((n (device-read-bytes dev buf 0 (length buf))))
                 (when (and n (not (eql n :eof)) (> n 0))
                   (multiple-value-bind (tokens dec2)
@@ -358,93 +147,6 @@ even when the presence of synchronization primitives is not guaranteed."
                       (when sync (%maybe-signal in-loop))))))))))
       (ignore-errors (disable-raw-char-mode dev))
       (ignore-errors (close-device dev)))))
-
-;; (defun input-loop-main (in-loop &key (sync nil) (poll-timeout-ms 200))
-;;   "Latency is independent of buffer size:
-;;    - termios uses VMIN=1/VTIME=0 → read returns after *first* byte. :contentReference[oaicite:4]{index=4}
-;;    - we perform exactly one read(2) per wake. :contentReference[oaicite:5]{index=5}
-;;    - restore is guaranteed via unwind-protect + exit-hook. :contentReference[oaicite:6]{index=6}"
-;;   (let* ((dev     (input-loop-dev in-loop))
-;;           (decoder (or (input-loop-decoder in-loop) (make-decoder)))
-;;           (buf     (make-array 1 :element-type '(unsigned-byte 8))))
-;;     ;; install an exit hook to restore tty even on crashy exits (not :abort). :contentReference[oaicite:7]{index=7}
-;;     (flet ((%restore ()
-;;              (ignore-errors (cl-inputs.device.api:disable-raw-char-mode dev))
-;;              (ignore-errors (cl-inputs.device.api:close-device dev))))
-;;       (push #'%restore sb-ext:*exit-hooks*))
-;;     (log-info "Input loop starting on ~A" (device-kind dev))
-;;     (unwind-protect
-;;       (handler-case
-;;         (progn
-;;           (open-device dev)
-;;           ;; IMPORTANT: keep the fd in *blocking* mode; VMIN=1 handles latency.
-;;           ;; Nonblocking + read-sequence refill was the source of your stalls. :contentReference[oaicite:8]{index=8}
-;;           (device-set-nonblocking dev nil)
-;;           (with-raw-char-mode (dev :vmin 1 :vtime 0 :canonical nil :echo nil :isig t)
-;;             (loop until (input-loop-stop? in-loop) do
-;;               (when (device-wait-readable dev poll-timeout-ms)
-;;                 (let ((n (device-read-bytes dev buf 0 (length buf))))
-;;                   (cond
-;;                     ((eql n :eof) (log-warn "EOF; exiting loop.") (return))
-;;                     ((or (null n) (zerop n)) nil)
-;;                     (t
-;;                       (multiple-value-bind (tokens dec2)
-;;                         (decode-chunk decoder (subseq buf 0 n))
-;;                         (setf decoder dec2
-;;                           (input-loop-decoder in-loop) dec2)
-;;                         (log-debug "Decoded ~D token(s) from ~D byte(s)" (length tokens) n)
-;;                         (dolist (tok tokens)
-;;                           (setf (input-loop-last-output in-loop) tok)
-;;                           (%deliver (input-loop-sink in-loop) tok)
-;;                           (when sync (%maybe-signal in-loop)))))))))))
-;;         (error (e)
-;;           (log-error "Input loop error: ~A" e)))
-;;       ;; robust cleanup
-;;       (ignore-errors (device-set-nonblocking dev nil))
-;;       (ignore-errors (disable-raw-char-mode dev))
-;;       (ignore-errors (close-device dev))
-;;       (log-info "Input loop exited."))))
-;; == end/input-loop.lisp ==
-
-;; (defun input-loop-main (in-loop &key (sync nil) (poll-timeout-ms 200))
-;;   (let* ((dev     (input-loop-dev in-loop))
-;;           (decoder (or (input-loop-decoder in-loop) (make-decoder)))
-;;           (buf     (make-array 1 :element-type '(unsigned-byte 8))))
-;;     (log-info "Input loop starting on ~A" (device-kind dev))
-;;     (unwind-protect
-;;       (handler-case
-;;         (progn
-;;           ;; open first so slots are bound, then enter raw char mode
-;;           (open-device dev)
-;;           (with-raw-char-mode (dev :vmin 1 :vtime 0 :canonical nil :echo nil :isig t)
-;;             (device-set-nonblocking dev t)
-;;             (loop until (input-loop-stop? in-loop) do
-;;               (when (device-wait-readable dev poll-timeout-ms)
-;;                 (let ((n (device-read-bytes dev buf 0 (length buf))))
-;;                   (cond
-;;                     ((eql n :eof) (log-warn "EOF on device; exiting.") (return))
-;;                     ((= n 0)      nil)
-;;                     (t
-;;                       (multiple-value-bind (tokens dec2)
-;;                         (decode-chunk decoder (subseq buf 0 n))
-;;                         (setf decoder dec2 (input-loop-decoder in-loop) dec2)
-;;                         (dolist (tok tokens)
-;;                           (log-info "Delivering token ~A" tok)
-;;                           (setf (input-loop-last-output in-loop) tok)
-;;                           (%deliver (input-loop-sink in-loop) tok)
-;;                           (when sync
-;;                             (let ((cond (ignore-errors (slot-value in-loop 'condition)))
-;;                                    (lock (ignore-errors (slot-value in-loop 'condition-lock))))
-;;                               (if (and cond lock)
-;;                                 (bt:with-lock-held (lock) (bt:condition-notify cond))
-;;                                 (when cond (bt:condition-notify cond))))))))))))))
-;;         (error (e)
-;;           (log-error "Input loop error: ~A" e)))
-;;       ;; idempotent cleanup
-;;       (ignore-errors (device-set-nonblocking dev nil))
-;;       (ignore-errors (disable-raw-char-mode dev))
-;;       (ignore-errors (close-device dev))
-;;       (log-info "Input loop exited."))))
 
 
 (defun start-input-loop
@@ -497,13 +199,7 @@ even when the presence of synchronization primitives is not guaranteed."
     (input-loop-dev in-loop))
   t)
 
-;;; Pull mode: a source object that yields tokens on demand
-;; (defstruct (input-source
-;; :constructor make-input-source)
-;;   "A source of input tokens, reading from a device and decoding them."
-;;   (dev nil :type cl-inputs.device.api:device)
-;;   (decoder nil :type cl-inputs.decoder:decoder)
-;;   (buf nil :type (array (unsigned-byte 8) (*)) :read-only t))
+;;; Pull mode: INPUT-SOURCE yields decoded tokens on demand.
 (defstruct (input-source (:constructor %make-input-source))
   "A source of input tokens, typically from a device.
 
@@ -526,9 +222,28 @@ All fields are required."
 (defvar *default-input-source* nil
   "Default input source for cl-inputs.")
 (defun get-input-source ()
-  "Get the default input source, creating it if necessary."
+  "Return the process-wide default input source, creating it on first use.
+
+Arguments:
+  None.
+
+Returns:
+  The cached INPUT-SOURCE. The first call delegates to MAKE-INPUT-SOURCE with
+  its default device and decoder.
+
+Mutation:
+  On first use, MAKE-INPUT-SOURCE stores the new source in
+  *DEFAULT-INPUT-SOURCE* and may enable raw mode on the underlying device.
+
+Conditions:
+  Device/decoder construction conditions propagate. Raw-mode enablement is
+  currently best-effort inside MAKE-INPUT-SOURCE and is therefore not signaled.
+
+Example:
+  (let ((source (get-input-source)))
+    (next-token source :timeout 0))"
   (or *default-input-source*
-    ))
+      (make-input-source)))
 (defun make-input-source (&key (device (cl-inputs.device.api:make-device :tty))
                            (decoder (cl-inputs.decoder:make-decoder)))
   (cl-inputs.device.api:open-device device)
