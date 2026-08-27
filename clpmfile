@@ -1,23 +1,14 @@
 ;;; -*- Mode: common-lisp; -*-
 (:api-version "0.4")
 
-;; (:source "quicklisp"
-;;   :url "https://beta.quicklisp.org/dist/quicklisp.txt"
-;;   :type :quicklisp)
-
 (:source "quicklisp" :type :clpi :url "https://quicklisp.common-lisp-project-index.org/")
-(:github "fiveam"
-  :path "lispci/fiveam"
-  :commit "e11dee752a8f59065033ef9d60641d4a2f1e8379")
-
-(:asd "/home/user/.roswell/lisp/quicklisp/quicklisp/quicklisp.asd")
-
 
 (:asd "./cl-inputs.asd")
-(:asd "./cl-inputs-tests.asd")
 
-(:system "bordeaux-threads")
+(:github "fiveam"
+ :path "lispci/fiveam"
+ :commit "e11dee752a8f59065033ef9d60641d4a2f1e8379")
+
 (:system "alexandria" :source "quicklisp")
-;; (:system "str" :source "quicklisp")
+(:system "bordeaux-threads")
 (:system "log4cl" :source "quicklisp")
-;; (:system "cl-reexport" :source "quicklisp")

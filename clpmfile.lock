@@ -9,10 +9,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 :sources
-(:implicit-file :type :file-system :system-files ("./cl-inputs-tests.asd"))
 (:implicit-file :type :file-system :system-files ("./cl-inputs.asd"))
-(:implicit-file :type :file-system :system-files
- ("/home/user/.roswell/lisp/quicklisp/quicklisp/quicklisp.asd"))
 (:implicit-vcs :type :vcs :projects (("fiveam" :github :path "lispci/fiveam")))
 ("quicklisp" :url "https://quicklisp.common-lisp-project-index.org/" :type
  :clpi)
@@ -24,13 +21,11 @@
 
 :requirements
 (:system :name "log4cl" :source "quicklisp")
-(:system :name "alexandria" :source "quicklisp")
 (:system :name "bordeaux-threads")
-(:asd-file :name "./cl-inputs-tests.asd")
-(:asd-file :name "./cl-inputs.asd")
-(:asd-file :name "/home/user/.roswell/lisp/quicklisp/quicklisp/quicklisp.asd")
+(:system :name "alexandria" :source "quicklisp")
 (:project :name "fiveam" :commit "e11dee752a8f59065033ef9d60641d4a2f1e8379"
  :source :implicit-vcs)
+(:asd-file :name "./cl-inputs.asd")
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -38,10 +33,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 :releases
-("./cl-inputs-tests.asd" :version :newest :source :implicit-file :systems nil)
 ("./cl-inputs.asd" :version :newest :source :implicit-file :systems nil)
-("/home/user/.roswell/lisp/quicklisp/quicklisp/quicklisp.asd" :version :newest
- :source :implicit-file :systems ("quicklisp"))
 ("alexandria" :version "2022-07-08" :source "quicklisp" :systems ("alexandria"))
 ("asdf-flv" :version "2016-04-21" :source "quicklisp" :systems
  ("net.didierverna.asdf-flv"))
@@ -59,14 +51,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 :reverse-dependencies
-("./cl-inputs-tests.asd" (t (:asd-file :name "./cl-inputs-tests.asd")))
-
 ("./cl-inputs.asd" (t (:asd-file :name "./cl-inputs.asd")))
-
-("/home/user/.roswell/lisp/quicklisp/quicklisp/quicklisp.asd"
- (t
-  (:asd-file :name
-   "/home/user/.roswell/lisp/quicklisp/quicklisp/quicklisp.asd")))
 
 ("alexandria" ((:system :name "fiveam") (:system :name "alexandria"))
  ((:system :name "bordeaux-threads") (:system :name "alexandria"))
@@ -88,4 +73,3 @@
 
 ("trivial-backtrace"
  ((:system :name "fiveam") (:system :name "trivial-backtrace")))
-
