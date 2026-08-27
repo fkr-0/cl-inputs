@@ -43,6 +43,22 @@ For optional `cl-events` integration:
 (asdf:load-system "cl-inputs/events")
 ```
 
+The optional adapter declares `cl-events` as an ASDF dependency. Consumers must
+make a compatible `cl-events` system ASDF-discoverable before loading it. The
+library-local CLPM bundle intentionally does not install `cl-events` or refer to
+a `../cl-events` sibling checkout; that bundle qualifies primary `cl-inputs`
+without hidden checkout state.
+
+In the ElmTUI in-tree workspace, the root CLPM bundle supplies both systems and
+qualifies the optional adapter with:
+
+```sh
+clpm bundle exec --with-client sbcl -- \
+  --noinform --non-interactive \
+  --eval '(require :asdf)' \
+  --eval '(asdf:load-system "cl-inputs/events")'
+```
+
 ## CLPM
 
 From this directory:
