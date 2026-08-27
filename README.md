@@ -2,6 +2,20 @@
 
 `cl-inputs` is a reusable terminal-input library for Common Lisp. It owns byte decoding, semantic input tokens, terminal device ports, fake terminals, sinks, and synchronous/asynchronous input loops. ElmTUI consumes these APIs but is not part of the library.
 
+## Release status
+
+The current in-tree candidate version is **0.2.0** for `cl-inputs`,
+`cl-inputs/events`, and `cl-inputs/tests`. This is release-candidate metadata
+only: the library has not been published to Quicklisp, Ultralisp, CLPM, or a
+separate source repository.
+
+The qualified implementation boundary is SBCL on POSIX/Linux. The primary
+system uses SB-POSIX and terminal-device code, so no non-SBCL or non-POSIX
+portability claim is made. The `cl-inputs` package is the convenience facade;
+focused `cl-inputs.*` packages expose decoder, token, keymap, sink, loop,
+device, and terminal APIs. `cl-inputs.events` belongs only to the optional
+`cl-inputs/events` adapter system.
+
 ## Core boundary
 
 The primary `cl-inputs` system is input-domain code. It does not require ElmTUI. Event-bus integration is an optional adapter exposed through the secondary `cl-inputs/events` system; compatibility helpers in `cl-inputs.sink` can load that adapter when it is available.

@@ -4,6 +4,9 @@ All notable changes to `cl-inputs` are recorded here. The library follows semant
 
 ## Unreleased
 
+Candidate version: **0.2.0**. This remains an in-tree candidate and is not a
+registry publication or separate-repository release.
+
 ### Added
 
 - Deterministic fake-terminal/device coverage and modular ASDF test suites.
