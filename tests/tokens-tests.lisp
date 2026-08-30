@@ -3,7 +3,8 @@
   (:import-from :fiveam #:def-suite #:in-suite #:test #:is #:is-true #:is-false)
   (:import-from :cl-inputs.tokens
                 #:input-token #:make-token #:input-token-kind #:input-token-data
-                #:input-token-ts #:+k-key+ #:+k-mouse+ #:+k-resize+ #:+k-paste+ #:+k-focus+)
+                #:input-token-ts #:+k-key+ #:+k-mouse+ #:+k-resize+ #:+k-paste+ #:+k-focus+
+                #:+k-terminal-response+ #:+k-protocol+)
   (:export #:tokens-tests))
 
 (in-package :cl-inputs.tests.tokens)
@@ -35,11 +36,14 @@
   (is (eq :mouse +k-mouse+))
   (is (eq :resize +k-resize+))
   (is (eq :paste +k-paste+))
-  (is (eq :focus +k-focus+)))
+  (is (eq :focus +k-focus+))
+  (is (eq :terminal-response +k-terminal-response+))
+  (is (eq :protocol +k-protocol+)))
 
 (test make-token-all-kinds
   "Test creating tokens of each kind"
-  (dolist (kind (list +k-key+ +k-mouse+ +k-resize+ +k-paste+ +k-focus+))
+  (dolist (kind (list +k-key+ +k-mouse+ +k-resize+ +k-paste+ +k-focus+
+                      +k-terminal-response+ +k-protocol+))
     (let ((tok (make-token kind '(:test t))))
       (is (eq kind (input-token-kind tok)))
       (is (eq t (getf (input-token-data tok) :test))))))

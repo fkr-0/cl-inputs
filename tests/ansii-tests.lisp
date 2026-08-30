@@ -4,6 +4,7 @@
   (:import-from :cl-inputs.terminal.ansii
                 #:introducer #:introducer-name #:introducer-code #:*introducers*
                 #:*ansi-keys* #:lookup-sequence #:get-sequence #:render-seq
+                #:response-type
                 #:ansi-fg-color-seq #:ansi-bg-color-seq #:ansi-attr-seq
                 #:parse-csi-sequence #:parse-sgr-parameters)
   (:import-from :cl-inputs.util #:string-to-utf-8-bytes)
@@ -65,6 +66,14 @@
       (is (stringp rendered))))
   (let ((home-seq (get-sequence :cursor-save-dec)))
     (is-true home-seq)))
+
+(test query-sequence-declares-response-type-without-stream-parser
+  (let ((query (get-sequence :cursor-report)))
+    (is (eq :cursor-position (response-type query))))
+  (multiple-value-bind (symbol status)
+      (find-symbol "READ-RESPONSE" :cl-inputs.terminal.ansii)
+    (declare (ignore symbol))
+    (is (null status))))
 
 (test render-seq-erase
   "Test rendering erase sequences"

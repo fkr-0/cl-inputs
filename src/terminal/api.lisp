@@ -138,7 +138,8 @@ Example Usage:
   (:documentation "Return cursor ROW and COL (0-based) if known, NIL otherwise."))
 
 (defgeneric get-terminal-size (target)
-  (:documentation "Return (ROWS . COLS) of the terminal if known, NIL otherwise."))
+  (:documentation
+   "Return WIDTH and HEIGHT as two values when known, or NIL and NIL otherwise."))
 
 (defgeneric hide-cursor (target))
 (defgeneric show-cursor (target))
@@ -171,6 +172,7 @@ Example Usage:
 (defmethod set-cursor-position ((target t) row col)
   (declare (ignore target row col)) nil)
 (defmethod get-cursor-position ((target t)) (values nil nil))
+(defmethod get-terminal-size ((target t)) (values nil nil))
 (defmethod hide-cursor ((target t)) (declare (ignore target)) nil)
 (defmethod show-cursor ((target t)) (declare (ignore target)) nil)
 (defmethod flush-output ((target t)) (declare (ignore target)) nil)

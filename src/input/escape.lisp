@@ -19,9 +19,9 @@
   "Attempt to map a full CSI/ESC sequence (OCTETS) to a token.
 Return NIL to let the generic path try SGR mouse or fallback handling.
 Override this function to provide custom escape sequence decoding."
-  (declare (type (simple-array (unsigned-byte 8) (*)) octets))
-  (log-info "Decoding CSI sequence: ~a" octets)
-
-  ;; Example (disabled): (lookup-seq octets) if you share table with keymap.
+  (declare (type (simple-array (unsigned-byte 8) (*)) octets)
+           (ignore octets))
+  ;; Deliberately no raw-sequence logging here. Protocol diagnostics retain
+  ;; bounded control-sequence provenance without exposing user/paste text.
   nil)
 ;; == end/escape.lisp ==

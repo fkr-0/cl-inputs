@@ -12,7 +12,7 @@
 ;;   ;; #:sb-posix #:termios #:tcgetattr #:tcsetattr
 ;;   ;;             #:tcsanow #:icanon #:echo #:vmin #:vtime
 ;;   (:import-from :cl-inputs.device.api
-;;     ;; Device port (generics; default stub prints warnings)
+;;     ;; Device port generics
 ;;     #:make-device
 ;;     #:device-kind
 ;;     #:open-device #:close-device
@@ -397,16 +397,42 @@
 (defmethod open-device ((dev tty-device))
   (log:info "Opening TTY device at path ~a" (tty-device-path dev))
   (unless (initialized-p dev)
-    (let* ((p (tty-device-path dev))
-            (fd-in  (sb-posix:open p sb-posix:o-rdonly))
-            (fd-out (sb-posix:open p sb-posix:o-wronly)))
-      (setf (%tty-in  dev) (device-open-fd-stream fd-in  )
-        (%tty-out dev) (device-open-fd-stream fd-out ))))
+    (let ((p (tty-device-path dev))
+          (fd-in nil)
+          (fd-out nil)
+          (in nil)
+          (out nil))
+      (handler-case
+        (progn
+          (setf fd-in (sb-posix:open p sb-posix:o-rdonly)
+                in (device-open-fd-stream fd-in))
+          ;; MAKE-FD-STREAM owns FD after successful construction.
+          (setf fd-in nil)
+          (setf fd-out (sb-posix:open p sb-posix:o-wronly)
+                out (device-open-fd-stream fd-out))
+          (setf fd-out nil)
+          (setf (%tty-in dev) in
+                (%tty-out dev) out))
+        (error (condition)
+          (when in (ignore-errors (close in)))
+          (when out (ignore-errors (close out)))
+          (when fd-in (ignore-errors (sb-posix:close fd-in)))
+          (when fd-out (ignore-errors (sb-posix:close fd-out)))
+          (setf (%tty-in dev) nil
+                (%tty-out dev) nil)
+          (error condition)))))
   dev)
 
 (defmethod close-device ((dev tty-device))
-  (when (%tty-in dev)  (ignore-errors (close (%tty-in dev)))  (setf (%tty-in dev)  nil))
-  (when (%tty-out dev) (ignore-errors (close (%tty-out dev))) (setf (%tty-out dev) nil))
+  ;; The concrete device also restores raw state so direct owners cannot leak it.
+  (ignore-errors (disable-raw-char-mode dev))
+  (when (%tty-in dev)
+    (ignore-errors (close (%tty-in dev)))
+    (setf (%tty-in dev) nil))
+  (when (%tty-out dev)
+    (ignore-errors (close (%tty-out dev)))
+    (setf (%tty-out dev) nil))
+  (setf (%tty-nonblock? dev) nil)
   t)
 
 (defmethod device-input-stream  ((dev tty-device)) (%tty-in dev))
@@ -445,7 +471,7 @@
 (defmethod enable-raw-char-mode ((dev tty-device)
                                   &key (vmin 1) (vtime 0) (canonical nil) (echo nil) (isig t))
   (%ensure-open-device dev)
-  (let* ((fd (%tty-in dev)))
+  (let* ((fd (device-fd dev)))
     (if (plusp (%tty-raw-depth dev))
       (incf (%tty-raw-depth dev))
       (let* ((orig (sb-posix:tcgetattr fd))
@@ -490,22 +516,32 @@
 ;;       ((= n 0) :eof)
 ;;       (t n)))
 ;;   )
-(defmethod device-read-bytes ((dev tty-device) buffer start end)
-  "Exactly one read(2) into BUFFER[START,END). No refills, no polling dance.
+(defun %tty-syscall-outcome (condition)
+  (let ((errno (sb-posix:syscall-errno condition)))
+    (cond
+      ((= errno sb-posix:eintr) :interrupted)
+      ((or (= errno sb-posix:eagain)
+           (= errno sb-posix:ewouldblock))
+       :would-block)
+      (t nil))))
 
-The SBCL backend pins BUFFER and hands a SAP into `sb-posix:read`, avoiding
-the displaced-array trick that triggered type warnings.  Other Lisps fall
-back to `read-sequence` on the input stream."
+(defmethod device-read-bytes ((dev tty-device) buffer start end)
+  "Perform exactly one read(2), returning a typed transient outcome when needed."
   (declare (type (integer 0 #.most-positive-fixnum) start end)
     (type (simple-array (unsigned-byte 8) (*)) buffer))
   (%ensure-open-device dev)
   (assert (<= 0 start end (length buffer)) (start end))
-  (let* ((count (- end start)))
+  (let ((count (- end start)))
     (cond
       ((zerop count) 0)
       (t
-        (let ((n (%tty-read-into-buffer (device-fd dev) buffer start count (%tty-in dev))))
-          (if (= n 0) :eof n))))))
+       (handler-case
+           (let ((n (%tty-read-into-buffer
+                     (device-fd dev) buffer start count (%tty-in dev))))
+             (if (= n 0) :eof n))
+         (sb-posix:syscall-error (condition)
+           (or (%tty-syscall-outcome condition)
+               (error condition))))))))
 
 (defmethod device-write-bytes ((dev tty-device) buffer start end)
   (%ensure-open-device dev)
@@ -546,7 +582,11 @@ back to `read-sequence` on the input stream."
   (%ensure-open-device dev)
   (let* ((fd (sb-sys:fd-stream-fd (%tty-in dev)))
           (secs (and timeout-ms (/ (coerce timeout-ms 'double-float) 1000d0))))
-    (sb-sys:wait-until-fd-usable fd :input secs)))
+    (handler-case
+        (sb-sys:wait-until-fd-usable fd :input secs)
+      (sb-posix:syscall-error (condition)
+        (or (%tty-syscall-outcome condition)
+            (error condition))))))
 
 (defmethod enable-raw-mode ((dev tty-device))
   (enable-raw-char-mode dev :vmin 1 :vtime 0 :canonical nil :echo nil :isig t))
@@ -692,126 +732,18 @@ back to `read-sequence` on the input stream."
         (write-output rendered (%tty-out instance))))))
 
 (defmethod get-cursor-position ((instance tty-device))
-  (let ((response-str nil))
-    (with-terminal-lock (instance)
-      (send-sequence instance :cursor-report)
-      (finish-output (%tty-out instance))
-      (let ((response-chars '())
-            (stream (%tty-in instance))
-            (deadline (+ (get-internal-real-time)
-                         (* 0.5 internal-time-units-per-second))))
-        (loop
-          (when (> (get-internal-real-time) deadline)
-            (log:warn "Timeout waiting for cursor report. Read so far: ~S"
-                      (nreverse (copy-list response-chars)))
-            (return))
-          (cond
-            ((listen stream)
-             (let ((char (read-byte stream nil :eof)))
-               (cond
-                 ((eq char :eof)
-                  (log:warn "EOF encountered while reading cursor report. Read so far: ~S"
-                            (coerce (nreverse (copy-list response-chars)) 'string))
-                  (return))
-                 (t
-                  (push char response-chars)
-                  (when (= char (char-code #\R))
-                    (setf response-str
-                          (coerce (mapcar #'code-char (nreverse response-chars))
-                                  'string))
-                    (log:debug "Cursor report full response read: ~S" response-str)
-                    (return))))))
-            (t
-             (sleep 0.01))))))
-    (when response-str
-      (handler-case
-          (let* ((esc-pos (position #\Esc response-str))
-                 (bracket-pos (position #\[ response-str :start (if esc-pos (1+ esc-pos) 0)))
-                 (r-pos (position #\R response-str :from-end t)))
-            (if (and esc-pos bracket-pos r-pos (< bracket-pos r-pos) (> r-pos (1+ bracket-pos)))
-                (let* ((content (subseq response-str (1+ bracket-pos) r-pos))
-                       (parts (uiop:split-string content :separator '(#\;))))
-                  (if (and (= (length parts) 2)
-                           (every #'digit-char-p (first parts))
-                           (plusp (length (first parts)))
-                           (every #'digit-char-p (second parts))
-                           (plusp (length (second parts))))
-                      (let ((parsed-row (parse-integer (first parts)))
-                            (parsed-col (parse-integer (second parts))))
-                        (log:info "Parsed cursor position: row=~A, col=~A from ~S"
-                                  parsed-row parsed-col response-str)
-                        (return-from get-cursor-position (values (1- parsed-row) (1- parsed-col))))
-                      (log:warn "Could not parse cursor report parts: ~S (original: ~S)"
-                                parts response-str)))
-                (log:warn "Malformed cursor report: ~S. ESC:~S, [:~S, R:~S"
-                          response-str esc-pos bracket-pos r-pos)))
-        (error (e)
-          (log:error "Error parsing cursor report string ~S: ~A" response-str e)
-          (values 0 0))))))
+  "Return the cursor position tracked by writes through this device.
+
+TTY device methods never read protocol replies directly: doing so would race the
+input source and could steal user input. Call CL-INPUTS.LOOP:SEND-TERMINAL-QUERY
+with :CURSOR-POSITION when an authoritative terminal CPR is required."
+  (values (%tty-cursor-row instance) (%tty-cursor-col instance)))
 
 (defmethod get-terminal-size ((instance tty-device))
-  (let ((response-str nil)
-         (default-w (%tty-width instance))
-         (default-h (%tty-height instance)))
-    (with-terminal-lock (instance)
-      (send-sequence instance :cursor-save)
-      (send-sequence instance :cursor-set-position 999 999) ; Standard way to request dimensions
-      (send-sequence instance :cursor-report)
-      (finish-output (%tty-out instance))
+  "Return the device's cached width and height without consuming input bytes.
 
-      (let ((response-chars '())
-             (stream (%tty-in instance))
-             (deadline (+ (get-internal-real-time) (* 0.5 internal-time-units-per-second)))) ; 0.5s total timeout
-        (loop
-          (when (> (get-internal-real-time) deadline)
-            (log:warn "Timeout waiting for cursor report. Read so far: ~S" (nreverse (copy-list response-chars) ))
-            (return)) ; Exit loop, response-str will be nil or partial
-
-          (cond
-            ((listen stream)
-             (let ((char (read-byte stream nil :eof)))
-               (cond
-                 ((eq char :eof)
-                  (log:warn "EOF encountered while reading cursor report. Read so far: ~S" (coerce (nreverse (copy-list response-chars)) 'string))
-                  (return)) ; Exit loop
-                 (t ; Character read
-                  (push char response-chars)
-                  (when (= char (char-code #\R))
-                    (setq response-str (coerce (mapcar #'code-char (nreverse response-chars)) 'string))
-                    (log:debug "Cursor report full response read: ~S" response-str)
-                    (return))))))
-            (t
-             (sleep 0.01)))))) ; Exit loop, proceed to parse
-
-    ;; Always restore cursor, regardless of whether we got a response
-    (with-terminal-lock (instance)
-      (send-sequence instance :cursor-restore)
-      (finish-output (%tty-out instance)))
-
-    (when response-str
-      (handler-case
-        (let* ((esc-pos (position #\Esc response-str))
-                (bracket-pos (position #\[ response-str :start (if esc-pos (1+ esc-pos) 0)))
-                (r-pos (position #\R response-str :from-end t)))
-          (if (and esc-pos bracket-pos r-pos (< bracket-pos r-pos) (> r-pos (1+ bracket-pos))) ; Ensure content between [ and R
-            (let* ((content (subseq response-str (1+ bracket-pos) r-pos))
-                    (parts (uiop:split-string content :separator '(#\;))))
-              (if (and (= (length parts) 2)
-                    (every #'digit-char-p (first parts))
-                    (plusp (length (first parts))) ; Ensure not empty string
-                    (every #'digit-char-p (second parts))
-                    (plusp (length (second parts)))) ; Ensure not empty string
-                (let ((parsed-h (parse-integer (first parts)))
-                       (parsed-w (parse-integer (second parts))))
-                  (log:info "Parsed dimensions: W=~A, H=~A from ~S" parsed-w parsed-h response-str)
-                  (return-from get-terminal-size (values parsed-w parsed-h)))
-                (log:warn "Could not parse dimensions from report parts: ~S (original: ~S)" parts response-str)))
-            (log:warn "Malformed cursor report: ~S. ESC:~S, [:~S, R:~S" response-str esc-pos bracket-pos r-pos)))
-        (error (e)
-          (log:error "Error parsing cursor report string ~S: ~A" response-str e))))
-
-    ;; Fallback if parsing failed or no response
-    (log:warn "Failed to get screen dimensions from terminal, using defaults: W=~A, H=~A" default-w default-h)
-    (values default-w default-h))) ; Exit loop, proceed to parse
+Live terminal negotiation belongs to the input-source response router. This
+method deliberately avoids cursor-report tricks that compete with the source."
+  (values (%tty-width instance) (%tty-height instance)))
 
 

@@ -2,7 +2,8 @@
   (:use :cl :fiveam)
   (:import-from :cl-inputs.device.api
                 #:make-device #:device-kind #:open-device #:close-device
-                #:enable-raw-mode #:disable-raw-mode #:device-capabilities)
+                #:enable-raw-mode #:disable-raw-mode #:device-capabilities
+                #:device-error)
   (:export #:device-api-tests))
 
 (in-package :cl-inputs.tests.device-api)
@@ -37,3 +38,12 @@
           (caps (device-capabilities dev)))
     (is (listp caps))
     (is-true (getf caps :truecolor))))
+
+(test unsupported-device-operation-signals-reportable-device-error
+  (let ((condition
+          (handler-case
+              (progn (open-device (list :unsupported)) nil)
+            (device-error (condition) condition))))
+    (is (typep condition 'device-error))
+    (is (search "Unsupported device operation OPEN-DEVICE"
+                (princ-to-string condition)))))
