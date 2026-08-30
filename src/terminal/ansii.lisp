@@ -38,15 +38,12 @@
     #:description ; accessor
     #:identifier ; accessor
     #:prerender ; accessor
-    #:response-parser ; accessor
+    #:response-type ; accessor
     #:reset-sequence ; accessor
     #:default-args ; accessor
     #:number-of-arguments
     #:lookup-sequence
     #:render-seq
-    #:read-response ; Generic response reader
-    #:parse-cursor-report-response
-    #:parse-device-status-report-response
     #:+ansi-escape-sequences+
     #:+ansi-escape-sequences-lookup+
     #:+ansi-escape-sequences-reset-lookup+
@@ -218,52 +215,20 @@
           :documentation "Keyword, Identifier of the sequence.")
         (prerender :initarg :prerender :initform nil :accessor prerender
           :documentation "Function to prerender the sequence.")
-        (response-parser :initarg :response-parser :reader response-parser
-          :documentation "Function to parse the response of the sequence.")
+        (response-type :initarg :response-type :initform nil :reader response-type
+          :documentation "Terminal response type expected after this query, or NIL.")
         (reset-sequence :initarg :reset-sequence :reader reset-sequence)
         (default-args :initarg :default-args :reader default-args
           :documentation "Default arguments for the sequence."))
       (:documentation "Ansi Escape Sequence to be sent to the terminal."))
 
-    (defun make-ansi-sequence (&key seq description identifier response-parser reset-sequence)
+    (defun make-ansi-sequence (&key seq description identifier response-type reset-sequence)
       (make-instance 'ansi-sequence
         :seq seq
         :desc description
         :id identifier
-        :response-parser response-parser
-        :reset-sequence reset-sequence))
-
-    (defun read-response (fd delimiters &optional (fn #'identity))
-      "Parses a terminal response stream.
-    FD is the stream to parse. DELIMITERS is a list of characters to split the response at.
-    FN is an optional function that will be mapped over the resulting list of strings.
-    Returns a list of the parsed values."
-      (read-char fd nil) ; throw away esc
-      (read-char fd nil) ; throw away [ (or other introducer part)
-      (let ((current-segment (make-string-output-stream))
-             results)
-        (loop for char = (read-char fd nil nil)
-          while (and char delimiters)
-          do (if (char= char (car delimiters))
-               (progn
-                 (push (funcall fn (get-output-stream-string current-segment)) results)
-                 (setf delimiters (cdr delimiters)))
-               (write-char char current-segment))
-          finally (unless (zerop (length (get-output-stream-string current-segment))) ; Add last segment if any
-                    (push (funcall fn (get-output-stream-string current-segment)) results)))
-        (nreverse results)))
-
-    (defun parse-cursor-report-response (fd)
-      "Parse a cursor report response (e.g., ESC [ <row> ; <col> R)."
-      (let ((delim '(#\; #\R)))
-        (mapcar (lambda (x) (parse-integer x :junk-allowed t))
-          (read-response fd delim))))
-
-    (defun parse-device-status-report-response (fd)
-      "Parse a device status report response (e.g., ESC [ <status> n)."
-      (let ((delim '(#\n)))
-        (mapcar (lambda (x) (parse-integer x :junk-allowed t))
-          (read-response fd delim)))))
+        :response-type response-type
+        :reset-sequence reset-sequence)))
 
   (defmethod render-seq ((seq ansi-sequence) &rest args)
     "Render the ANSI control sequence with args."
@@ -379,7 +344,7 @@
                          (sequence-obj (funcall #'make-ansi-sequence :seq ',seq
                                          :description ,desc
                                          :identifier ,id
-                                         :response-parser ,response
+                                         :response-type ,response
                                          :reset-sequence ,reset)))
                     (setf (gethash ident +ansi-escape-sequences+) sequence-obj)
                     (setf (gethash (apply #'concatenate 'string (loop for part in ',seq collect (if (stringp part) part "~A")))
@@ -458,7 +423,7 @@
       (defseq :cursor-prev-line "Move cursor to previous line" ("ESC" "[" nil "F"))
       (defseq :cursor-horizontal-absolute "Move cursor to column" ("ESC" "[" nil "G"))
       (defseq :cursor-set-position "Set cursor position row;col" ("ESC" "[" nil ";" nil "H")) ; Also f
-      (defseq :cursor-report "Report cursor position" ("ESC" "[6n") :response #'parse-cursor-report-response)
+      (defseq :cursor-report "Report cursor position" ("ESC" "[6n") :response :cursor-position)
       (defseq :cursor-hide "Hide cursor" ("ESC" "[?25l"))
       (defseq :cursor-show "Show cursor" ("ESC" "[?25h"))
 

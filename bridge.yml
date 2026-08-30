@@ -1,0 +1,33 @@
+version: 1
+name: cl-input
+description: Standalone Common Lisp terminal-input decoding, device, token, sink, and input-loop library.
+defaultTrack: local
+shell: true
+syncDir:
+  - .
+agent:
+  notes: Keep core cl-inputs independent of ElmTUI. cl-events is optional through cl-inputs/events. For Lisp/ASD changes edit balanced forms, validate structure, load, and run focused tests immediately.
+  tasks:
+    - Harden incremental terminal protocol decoding and ambiguity handling without leaking ElmTUI policy into the core library.
+    - Expand deterministic fake-terminal and bounded lifecycle qualification before making portability claims.
+  changelog:
+    - Extracted the clean historical ElmTUI cl-inputs subtree into a standalone Git repository with preserved lineage.
+commands:
+  test:
+    run: ["/bin/sh", "-lc", "set -eu; CLPM_HOME=.cache/clpm clpm bundle exec --with-client sbcl -- --noinform --non-interactive --eval '(require :asdf)' --eval '(asdf:test-system \"cl-inputs\")'"]
+    description: Run the standalone cl-inputs ASDF tests through the local CLPM bundle
+    cwd: .
+    timeoutMs: 120000
+    category: test
+  load:
+    run: ["/bin/sh", "-lc", "set -eu; CLPM_HOME=.cache/clpm clpm bundle exec --with-client sbcl -- --noinform --non-interactive --eval '(require :asdf)' --eval '(asdf:load-system \"cl-inputs\")'"]
+    description: Load the standalone cl-inputs system through the local CLPM bundle
+    cwd: .
+    timeoutMs: 120000
+    category: test
+  check:
+    run: ["/bin/sh", "-lc", "set -eu; CLPM_HOME=.cache/clpm clpm bundle exec --with-client sbcl -- --noinform --non-interactive --eval '(require :asdf)' --eval '(asdf:test-system \"cl-inputs\")'; git diff --check"]
+    description: Run standalone tests and whitespace validation
+    cwd: .
+    timeoutMs: 120000
+    category: test

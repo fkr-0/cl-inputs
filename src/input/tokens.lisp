@@ -6,7 +6,8 @@
   (:use :cl :alexandria)
   (:export #:input-token #:make-token #:input-token-kind #:input-token-data #:input-token-ts
     ;; common :kind values
-    #:+k-key+ #:+k-mouse+ #:+k-resize+ #:+k-paste+ #:+k-focus+))
+    #:+k-key+ #:+k-mouse+ #:+k-resize+ #:+k-paste+ #:+k-focus+
+    #:+k-terminal-response+ #:+k-protocol+))
 (in-package :cl-inputs.tokens)
 
 (defparameter +k-key+    :key)    ;; a key press or release event
@@ -14,6 +15,10 @@
 (defparameter +k-resize+ :resize) ;; a terminal resize event
 (defparameter +k-paste+  :paste)  ;; a paste event (e.g., from clipboard)
 (defparameter +k-focus+  :focus)  ;; a focus event (focus in or out)
+(defparameter +k-terminal-response+ :terminal-response)
+;; A syntactically valid terminal reply. Source routing keeps these off the
+;; ordinary user-input path and offers them to response correlations instead.
+(defparameter +k-protocol+ :protocol) ;; diagnostic/unsupported protocol outcome
 
 (defstruct input-token
   "A token representing a single input event.

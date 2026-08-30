@@ -25,7 +25,7 @@
   ;;             #:tcsanow #:icanon #:echo #:vmin #:vtime
   (:import-from :cl-inputs.device.api
     #:enable-raw-char-mode
-    ;; Device port (generics; default stub prints warnings)
+    ;; Device port generics
     #:make-device
     #:device-kind #:device-input-stream #:device-output-stream #:device-fd
     #:device-set-nonblocking
@@ -269,44 +269,32 @@ All fields are required unless otherwise noted."
   (format t "Spawning URxvt terminal with program: ~A~%" urxvt-program)
   
   (multiple-value-bind (master-fd slave-fd pty-name proc) (spawn-urxvt-with-pty)
-    (handler-case
-      (let* (
-              ;; (process (run-program urxvt-program
-
-              ;;            (append urxvt-args (list
-              ;;                                 "-name" name
-              ;;                                 "-pty-fd"
-              ;;                                 (format nil "~A" slave-fd)))
-              ;;            :search t :wait nil :input nil :output nil :error :output 
-              ;;            :pty (format nil "~A" master-fd))
-              ;;   ;; :preserve-fds (list slave-fd) ; SBCL specific, might not be needed if urxvt handles -pty-fd correctly
-              ;;   )
-              (stream (make-fd-stream master-fd :input t :output t :element-type '(unsigned-byte 8) :buffering :none))
-              (original-termios (enable-raw-mode master-fd)) ; Set raw mode on our end of PTY
-              (instance (make-urxvt-device :master-fd master-fd
-                          :slave-fd slave-fd ; Keep for potential cleanup
-                          :pty-name pty-name
-                          :proc proc
-                          :stream stream
-                          :original-termios original-termios)))
-        ;; Ensure master is blocking
-        (let* ((flags (sb-posix:fcntl master-fd sb-posix:f-getfl))
-                (newflags (logandc2 flags sb-posix:o-nonblock)))
-          (sb-posix:fcntl master-fd sb-posix:f-setfl newflags))
-        (sleep 0.5) ; Give URxvt a moment to start up
-
-        ;; (multiple-value-bind (w h) (get-screen-dimensions instance)
-        ;;   (setf (urxvt-device-width instance) w
-        ;;     (urxvt-device-height instance) h))
-        ;; (elmtui.backend.common.utils:render-seq (get-sequence :cursor-hide))
-        ;; (elmtui.backend.common.utils:render-seq (get-sequence :alt-screen-buffer))
-        ;; (clear-screen instance)
-        ;; (flush-output instance)
-        instance)
-      (error (c)
-        (when (and master-fd (>= master-fd 0)) (unix-close master-fd))
-        (when (and slave-fd (>= slave-fd 0)) (unix-close slave-fd))
-        (error "Failed to initialize URxvt backend: ~A" c)))))
+    ;; SPAWN-URXVT-WITH-PTY has already closed the parent's slave descriptor.
+    ;; Track whether MAKE-FD-STREAM has taken ownership of MASTER-FD so a later
+    ;; constructor failure cannot double-close either descriptor.
+    (let ((stream nil))
+      (handler-case
+        (progn
+          (setf stream
+                (make-fd-stream master-fd :input t :output t
+                  :element-type '(unsigned-byte 8) :buffering :none))
+          ;; Raw/nonblocking policy belongs to the input source lifecycle.
+          (make-urxvt-device :master-fd master-fd
+            :slave-fd slave-fd ; retained only as lifecycle metadata
+            :pty-name pty-name
+            :proc proc
+            :stream stream
+            :original-termios nil))
+        (error (condition)
+          (cond
+            (stream
+             (ignore-errors (close stream)))
+            ((and master-fd (>= master-fd 0))
+             (ignore-errors (unix-close master-fd))))
+          (when proc
+            (ignore-errors (process-kill proc 15))
+            (ignore-errors (process-kill proc 9)))
+          (error "Failed to initialize URxvt backend: ~A" condition))))))
 
 ;; (register-backend :urxvt
 ;;   #'spawn-urxvt
@@ -330,39 +318,25 @@ All fields are required unless otherwise noted."
 
 (defmethod open-device ((dev urxvt-device)) dev)
 (defmethod close-device ((instance urxvt-device))
+  "Idempotently release owned PTY/process resources without hidden delay."
   (with-urxvt-lock (instance)
-    (handler-case
-      (progn
-        (when (urxvt-device-stream instance)
-          ;; (elmtui.backend.common.utils:render-seq (get-sequence :normal-screen-buffer))
-          ;; (elmtui.backend.common.utils:render-seq (get-sequence :cursor-show))
-          ;; (elmtui.backend.common.utils:render-seq (get-sequence :reset))
-          (finish-output (urxvt-device-stream instance)))
-
-        (when (and (urxvt-device-master-fd instance) (>= (urxvt-device-master-fd instance) 0))
-          (disable-raw-mode instance))
-
-        (when (urxvt-device-stream instance)
-          (close (urxvt-device-stream instance))
-          (setf (urxvt-device-stream instance) nil))
-
-        (when (and (urxvt-device-master-fd instance) (>= (urxvt-device-master-fd instance) 0))
-          (unix-close (urxvt-device-master-fd instance))
-          (setf (urxvt-device-master-fd instance) -1))
-
-        (when (and (urxvt-device-slave-fd instance) (>= (urxvt-device-slave-fd instance) 0))
-          ;; Slave FD is typically managed by the PTY system and URxvt,
-          ;; closing master should be enough. Explicit close might error if URxvt already closed it.
-          ;; (unix-close (urxvt-device-slave-fd instance))
-          (setf (urxvt-device-slave-fd instance) -1))
-
-        (when (urxvt-device-proc instance)
-          (ignore-errors (process-kill (urxvt-device-proc instance) 15)) ; SIGTERM
-          (sleep 0.1)
-          (ignore-errors (process-kill (urxvt-device-proc instance) 9))  ; SIGKILL
-          (setf (urxvt-device-proc instance) nil)))
-      (error (c)
-        (warn "Error during URxvt backend shutdown: ~A" c))))
+    (ignore-errors (cl-inputs.device.api:disable-raw-char-mode instance))
+    (let ((stream (urxvt-device-stream instance))
+          (master-fd (urxvt-device-master-fd instance)))
+      (when stream
+        (ignore-errors (finish-output stream))
+        (ignore-errors (close stream))
+        ;; MAKE-FD-STREAM owns the master descriptor.
+        (setf (urxvt-device-stream instance) nil
+              (urxvt-device-master-fd instance) -1))
+      (when (and (null stream) master-fd (>= master-fd 0))
+        (ignore-errors (unix-close master-fd))
+        (setf (urxvt-device-master-fd instance) -1)))
+    (setf (urxvt-device-slave-fd instance) -1)
+    (when (urxvt-device-proc instance)
+      (ignore-errors (process-kill (urxvt-device-proc instance) 15))
+      (ignore-errors (process-kill (urxvt-device-proc instance) 9))
+      (setf (urxvt-device-proc instance) nil)))
   t)
 
 (defmethod device-input-stream ((dev urxvt-device))
@@ -379,15 +353,8 @@ All fields are required unless otherwise noted."
 ;;   t)
 
 (defmethod enable-raw-mode ((term urxvt-device))
-  (let ((in-fd (term-in-fd term)))
-    (let ((termios (sb-posix:tcgetattr in-fd)))
-      (setf (sb-posix:termios-lflag termios)
-        (logand (lognot sb-posix:icanon)
-          (lognot sb-posix:echo)
-          (sb-posix:termios-lflag termios)))
-      (sb-posix:tcsetattr in-fd sb-posix:tcsaflush termios)
-      (setf (urxvt-device-original-termios term) termios)
-      termios)))
+  (enable-raw-char-mode term :vmin 1 :vtime 0
+                        :canonical nil :echo nil :isig t))
 
 (defmethod enable-raw-char-mode ((term urxvt-device)
                                   &key (vmin 1) (vtime 0) (canonical nil) (echo nil) (isig t))
@@ -420,29 +387,36 @@ All fields are required unless otherwise noted."
       (setf (urxvt-device-original-termios term) nil)))
   t)
 (defmethod disable-raw-mode ((term urxvt-device))
-  "Disable raw mode, restoring the previous terminal settings.
-TERMIOS is the value returned by ENABLE-RAW-MODE."
-  (let ((in-fd (term-in-fd term))
-         (termios (urxvt-device-original-termios term)))
-    (setf (sb-posix:termios-lflag termios)
-      (logior (sb-posix:termios-lflag termios)
-        sb-posix:icanon
-        sb-posix:echo))
-    (sb-posix:tcsetattr in-fd sb-posix:tcsaflush termios)))
+  (cl-inputs.device.api:disable-raw-char-mode term))
+
+(defun %urxvt-syscall-outcome (condition)
+  (let ((errno (sb-posix:syscall-errno condition)))
+    (cond
+      ((= errno sb-posix:eintr) :interrupted)
+      ((or (= errno sb-posix:eagain)
+           (= errno sb-posix:ewouldblock))
+       :would-block)
+      (t nil))))
+
+(defun %urxvt-read-into-buffer (fd buffer start count)
+  (sb-sys:with-pinned-objects (buffer)
+    (sb-posix:read fd (sb-sys:sap+ (sb-sys:vector-sap buffer) start) count)))
 
 (defmethod device-read-bytes ((dev urxvt-device) buffer start end)
+  "Perform one nonblocking-capable PTY read; readiness belongs to the caller."
   (let ((fd (urxvt-device-master-fd dev)))
-    (if (and fd (>= fd 0))
-      (with-urxvt-lock (dev)
-        ;; Wait up to 50ms for readability to avoid blocking forever
-        (when (eq :timeout (sb-sys:wait-until-fd-usable fd :input 0.05))
-          (return-from device-read-bytes 0))
-        (let ((bytes-read (read-sequence buffer (urxvt-device-stream dev)
-                            :start start :end end)))
-          (cond
-            ((= bytes-read 0) :eof)
-            (t bytes-read))))
-      (error "URxvt device is not open or master FD is invalid."))))
+    (unless (and fd (>= fd 0))
+      (error "URxvt device is not open or master FD is invalid."))
+    (with-urxvt-lock (dev)
+      (handler-case
+          (let ((count (- end start)))
+            (if (zerop count)
+              0
+              (let ((n (%urxvt-read-into-buffer fd buffer start count)))
+                (if (zerop n) :eof n))))
+        (sb-posix:syscall-error (condition)
+          (or (%urxvt-syscall-outcome condition)
+              (error condition)))))))
 
 (defun read-into-buffer (dev buffer start end &optional (timeout nil))
   "Reads bytes from the stream into BUFFER from START to END."
@@ -485,7 +459,11 @@ This method should be implemented by subclasses of low-level-terminal."
 (defmethod cl-inputs.device.api:device-wait-readable ((dev urxvt-device) timeout-ms)
   (let* ((fd (urxvt-device-master-fd dev))
           (secs (and timeout-ms (/ (coerce timeout-ms 'double-float) 1000d0))))
-    (sb-sys:wait-until-fd-usable fd :input secs)))
+    (handler-case
+        (sb-sys:wait-until-fd-usable fd :input secs)
+      (sb-posix:syscall-error (condition)
+        (or (%urxvt-syscall-outcome condition)
+            (error condition))))))
 
 (defmethod device-set-modes ((dev urxvt-device) modes)
   (declare (ignore modes))
@@ -634,8 +612,8 @@ This macro:
                (logand fl (lognot sb-posix:o-nonblock))))
     (sb-posix:fcntl fd sb-posix:f-setfl fl)
     (setf (urxvt-device-blocking dev)
-      (not (zerop (logand (sb-posix:fcntl fd sb-posix:f-getfl) sb-posix:o-nonblock))))
-    (urxvt-device-blocking dev)))
+      (zerop (logand (sb-posix:fcntl fd sb-posix:f-getfl) sb-posix:o-nonblock)))
+    (not (urxvt-device-blocking dev))))
 
 ;; (defmethod enable-raw-char-mode ((dev urxvt-device)
 ;;                                   &key (vmin 1) (vtime 0)

@@ -13,9 +13,7 @@
   (:use #:sb-unix)
 
   (:export
-    ;; Device port (generics; default stub prints warnings)
-    #:device-wait-readable
-    #:device-enable-raw-char-mode
+    ;; Device port
     #:with-raw-char-mode
     #:enable-raw-char-mode
     #:disable-raw-char-mode
@@ -43,7 +41,10 @@
 (in-package :cl-inputs.device.api)
 
 (defun %unsupported-device-operation (operation dev)
-  (error 'device-error :device dev :reason (format nil "Unsupported device operation ~A for ~S" operation dev)))
+  (error 'device-error
+         :device dev
+         :message (format nil "Unsupported device operation ~A for ~S"
+                          operation dev)))
 (defgeneric disable-raw-char-mode (dev))
 ;; (defgeneric get-terminal-size (dev)
 ;;   (:documentation "Return (values rows cols) for DEV."))
@@ -85,14 +86,23 @@
 (defgeneric device-kind (dev) (:documentation "Return a keyword like :tty, :faketerm, :urxvt."))
 
 (defgeneric open-device (dev)
-  (:documentation "Return a device handle (whatever your impl wants)."))
+  (:documentation
+    "Acquire DEV resources idempotently and return DEV. A backend that acquires
+multiple resources must clean up already-acquired resources if opening fails."))
 
-(defgeneric close-device (dev))
+(defgeneric close-device (dev)
+  (:documentation
+    "Idempotently release backend-owned resources. Concrete terminal devices
+must restore any raw state they still own before their descriptors disappear."))
 (defgeneric enable-raw-mode (dev))
 (defgeneric disable-raw-mode (dev))
 
 (defgeneric device-read-bytes (dev buffer start end)
-  (:documentation "Fill BUFFER[start..end). Return number of bytes or :eof."))
+  (:documentation
+    "Perform at most one read attempt into BUFFER[START,END). Return a positive
+byte count, 0 for a zero-length request, :EOF for terminal end, :WOULD-BLOCK for
+EAGAIN/EWOULDBLOCK, or :INTERRUPTED for EINTR. The caller owns retry/deadline
+policy; implementations must not hide retry loops or fixed readiness sleeps."))
 
 (defgeneric device-write-bytes (dev buffer start end)
   (:documentation "Optional; return bytes written."))
@@ -122,53 +132,54 @@
     MODES is a plist, e.g. (:mouse :sgr :paste t :focus t)."))
 
 
-;;; Default fallbacks (do nothing) so the protocol is optional to implement
+;;; Default fallbacks fail explicitly so unsupported device types cannot appear
+;;; to satisfy the protocol.
 (defmethod open-device ((dev t))
-  "Default fallback for OPEN-DEVICE. Returns DEV unchanged.
+  "Default fallback for OPEN-DEVICE. Signals DEVICE-ERROR.
 
 Extension Point:
   Override in device backends to implement device opening logic.
   Required for concrete device types.
 
 Side Effects:
-  None by default."
+  Signals DEVICE-ERROR."
   (%unsupported-device-operation 'open-device dev))
 
 (defmethod close-device ((dev t))
-  "Default fallback for CLOSE-DEVICE. Returns T.
+  "Default fallback for CLOSE-DEVICE. Signals DEVICE-ERROR.
 
 Extension Point:
   Override in device backends to implement device closing logic.
   Required for concrete device types.
 
 Side Effects:
-  None by default."
+  Signals DEVICE-ERROR."
   (%unsupported-device-operation 'close-device dev))
 
 (defmethod enable-raw-mode ((dev t))
-  "Default fallback for ENABLE-RAW-MODE. Returns T.
+  "Default fallback for ENABLE-RAW-MODE. Signals DEVICE-ERROR.
 
 Extension Point:
   Override in device backends to enable raw char mode on the device.
   Required for concrete device types.
 
 Side Effects:
-  None by default."
+  Signals DEVICE-ERROR."
   (%unsupported-device-operation 'enable-raw-mode dev))
 
 (defmethod disable-raw-mode ((dev t))
-  "Default fallback for DISABLE-RAW-MODE. Returns T.
+  "Default fallback for DISABLE-RAW-MODE. Signals DEVICE-ERROR.
 
 Extension Point:
   Override in device backends to disable raw char mode on the device.
   Required for concrete device types.
 
 Side Effects:
-  None by default."
+  Signals DEVICE-ERROR."
   (%unsupported-device-operation 'disable-raw-mode dev))
 
 (defmethod device-read-bytes ((dev t) buffer start end)
-  "Default fallback for DEVICE-READ-BYTES. Returns :EOF.
+  "Default fallback for DEVICE-READ-BYTES. Signals DEVICE-ERROR.
 
 Extension Point:
   Override in device backends to implement byte reading from the device.
@@ -180,16 +191,13 @@ Arguments:
   START  -- start index (integer)
   END    -- end index (integer, exclusive)
 
-Return Value:
-  Number of bytes read (non-negative integer), :EOF on end-of-file.
-
 Side Effects:
-  None by default."
+  Signals DEVICE-ERROR."
   (declare (ignore buffer start end))
   (%unsupported-device-operation 'device-read-bytes dev))
 
 (defmethod device-write-bytes ((dev t) buffer start end)
-  "Default fallback for DEVICE-WRITE-BYTES. Returns 0.
+  "Default fallback for DEVICE-WRITE-BYTES. Signals DEVICE-ERROR.
 
 Extension Point:
   Override in device backends to implement byte writing to the device.
@@ -201,28 +209,25 @@ Arguments:
   START  -- start index (integer)
   END    -- end index (integer, exclusive)
 
-Return Value:
-  Number of bytes written (integer).
-
 Side Effects:
-  None by default."
+  Signals DEVICE-ERROR."
   (declare (ignore buffer start end))
   (%unsupported-device-operation 'device-write-bytes dev))
 
 (defmethod device-input-stream ((dev t))
-  "Default fallback for DEVICE-INPUT-STREAM. Returns NIL."
+  "Default fallback for DEVICE-INPUT-STREAM. Signals DEVICE-ERROR."
   (%unsupported-device-operation 'device-input-stream dev))
 
 (defmethod device-output-stream ((dev t))
-  "Default fallback for DEVICE-OUTPUT-STREAM. Returns NIL."
+  "Default fallback for DEVICE-OUTPUT-STREAM. Signals DEVICE-ERROR."
   (%unsupported-device-operation 'device-output-stream dev))
 
 (defmethod device-fd ((dev t))
-  "Default fallback for DEVICE-FD. Returns NIL."
+  "Default fallback for DEVICE-FD. Signals DEVICE-ERROR."
   (%unsupported-device-operation 'device-fd dev))
 
 (defmethod device-capabilities ((dev t))
-  "Default fallback for DEVICE-CAPABILITIES. Returns NIL.
+  "Default fallback for DEVICE-CAPABILITIES. Signals DEVICE-ERROR.
 
 Extension Point:
   Override in device backends to report device capabilities.
@@ -231,15 +236,12 @@ Extension Point:
 Arguments:
   DEV -- device object
 
-Return Value:
-  Plist of capabilities, or NIL.
-
 Side Effects:
-  None by default."
+  Signals DEVICE-ERROR."
   (%unsupported-device-operation 'device-capabilities dev))
 
 (defmethod device-set-modes ((dev t) modes)
-  "Default fallback for DEVICE-SET-MODES. Returns T.
+  "Default fallback for DEVICE-SET-MODES. Signals DEVICE-ERROR.
 
 Extension Point:
   Override in device backends to set terminal modes (mouse, paste, etc).
@@ -249,11 +251,8 @@ Arguments:
   DEV   -- device object
   MODES -- plist of mode settings
 
-Return Value:
-  T if successful.
-
 Side Effects:
-  None by default."
+  Signals DEVICE-ERROR."
   (declare (ignore modes))
   (%unsupported-device-operation 'device-set-modes dev))
 ;; ;; == cl-inputs/src/device/protocol.lisp ==
@@ -349,8 +348,9 @@ Side Effects:
 
 (defgeneric device-wait-readable (dev timeout-ms)
   (:documentation
-    "Block up to TIMEOUT-MS for readability; T if readable, NIL on timeout.
-On SBCL TTY the impl uses SB-SYS:WAIT-UNTIL-FD-USABLE (seconds)."))
+    "Wait at most TIMEOUT-MS (a non-negative real, or NIL) for readability.
+Return T if readable, NIL on timeout, or :INTERRUPTED for EINTR. The caller is
+responsible for recomputing its remaining deadline budget before retrying."))
 ;; == end/protocol.lisp ==
 
 (defgeneric device-set-nonblocking (dev flag)

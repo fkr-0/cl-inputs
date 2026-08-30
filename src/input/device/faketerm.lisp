@@ -14,7 +14,7 @@
   ;; #:sb-posix #:termios #:tcgetattr #:tcsetattr
   ;;             #:tcsanow #:icanon #:echo #:vmin #:vtime
   (:import-from :cl-inputs.device.api
-    ;; Device port (generics; default stub prints warnings)
+    ;; Device port generics
     #:make-device
     #:device-kind
     #:open-device #:close-device
@@ -27,9 +27,16 @@
     #:device-wait-readable)
   (:import-from :cl-inputs.terminal.api
     #:clear-screen #:clear-area #:draw-text-at #:draw-char-at #:fill-rectangle
-    #:scroll-lines #:set-cursor-position #:get-cursor-position #:hide-cursor #:show-cursor
+    #:scroll-lines #:get-terminal-size #:set-cursor-position #:get-cursor-position
+    #:hide-cursor #:show-cursor
     #:flush-output #:apply-style #:reset-style)
-  (:export #:faketerm-screen-lines))
+  (:export
+    #:faketerm-screen-lines #:faketerm-inject! #:faketerm-captured
+    #:faketerm-device-p #:faketerm-device-width #:faketerm-device-height
+    #:faketerm-device-open-p #:faketerm-device-closed-p
+    #:faketerm-device-raw-depth #:faketerm-device-nonblocking-p
+    #:faketerm-device-read-count #:faketerm-device-wait-count
+    #:faketerm-device-close-count))
 
 (in-package :cl-inputs.device.faketerm)
 ;; A simple queue implementation using cons cells.
@@ -73,7 +80,18 @@ All fields are required."
   (cursor-col 0 :type integer)
   (cursor-visible-p t :type boolean)
   (log '() :type list)
-  (current-style nil :type list))
+  (current-style nil :type list)
+  (open-p nil :type boolean)
+  (closed-p nil :type boolean)
+  (raw-depth 0 :type fixnum)
+  (nonblocking-p nil :type boolean)
+  (read-count 0 :type fixnum)
+  (wait-count 0 :type fixnum)
+  (close-count 0 :type fixnum)
+  (eof-on-empty-p t :type boolean)
+  (wait-function nil :type (or null function))
+  (write-function nil :type (or null function))
+  (fail-on-raw-p nil :type boolean))
 
 (defun %make-screen (width height &optional style)
   (let ((screen (make-array (list height width) :element-type 'faketerm-cell
@@ -129,7 +147,8 @@ All fields are required."
 (defun %make-faketerm-device ()
   "Construct a creator closure for faketerm devices."
   (lambda (&key (script nil) (caps '(:truecolor t :mouse nil :paste nil :focus nil))
-            (width 80) (height 24))
+            (width 80) (height 24) (eof-on-empty-p t) wait-function
+            write-function fail-on-raw-p)
     (let ((in (make-queue)) (out (make-queue)))
       (when script
         (if (pathnamep script)
@@ -142,7 +161,11 @@ All fields are required."
       (make-faketerm-device :in-queue in :out-queue out :caps caps
         :width width :height height
         :screen (%make-screen width height)
-        :current-style '(:fg :default :bg :default :attrs nil)))))
+        :current-style '(:fg :default :bg :default :attrs nil)
+        :eof-on-empty-p eof-on-empty-p
+        :wait-function wait-function
+        :write-function write-function
+        :fail-on-raw-p (not (null fail-on-raw-p))))))
 
 (defmethod make-device ((backend (eql :faketerm)) &rest initargs &key &allow-other-keys)
   "Instantiate a new faketerm-device for the :faketerm backend."
@@ -151,36 +174,65 @@ All fields are required."
 
 (defmethod device-kind ((dev faketerm-device)) :faketerm)
 
-(defmethod open-device ((dev faketerm-device)) dev)
+(defmethod open-device ((dev faketerm-device))
+  (setf (faketerm-device-open-p dev) t
+        (faketerm-device-closed-p dev) nil)
+  dev)
 
-(defmethod close-device ((dev faketerm-device)) t)
+(defmethod close-device ((dev faketerm-device))
+  (unless (faketerm-device-closed-p dev)
+    (incf (faketerm-device-close-count dev))
+    (setf (faketerm-device-open-p dev) nil
+          (faketerm-device-closed-p dev) t
+          (faketerm-device-raw-depth dev) 0
+          (faketerm-device-nonblocking-p dev) nil))
+  t)
 
-(defmethod enable-raw-mode ((dev faketerm-device)) t)
+(defmethod enable-raw-mode ((dev faketerm-device))
+  (enable-raw-char-mode dev))
 
-(defmethod disable-raw-mode ((dev faketerm-device)) t)
+(defmethod disable-raw-mode ((dev faketerm-device))
+  (disable-raw-char-mode dev))
 
 (defmethod enable-raw-char-mode ((dev faketerm-device)
                                   &key vmin vtime canonical echo isig)
-  (declare (ignore dev vmin vtime canonical echo isig))
+  (declare (ignore vmin vtime canonical echo isig))
+  (unless (faketerm-device-open-p dev)
+    (open-device dev))
+  (when (faketerm-device-fail-on-raw-p dev)
+    (error "Injected faketerm raw-mode activation failure."))
+  (incf (faketerm-device-raw-depth dev))
   t)
 
 (defmethod disable-raw-char-mode ((dev faketerm-device))
+  (when (plusp (faketerm-device-raw-depth dev))
+    (decf (faketerm-device-raw-depth dev)))
   t)
 
 (defmethod device-read-bytes ((dev faketerm-device) buffer start end)
-  "Read a chunk from the input queue into BUFFER[start..end).
-Returns number of bytes read, or :eof if the queue is empty."
-  (if (queue-empty-p (faketerm-device-in-queue dev))
-    :eof
-    (let ((chunk (queue-pop (faketerm-device-in-queue dev))))
-      (replace buffer chunk :start1 start)
-      (length chunk))))
+  "Read one scripted outcome or octet chunk without blocking."
+  (incf (faketerm-device-read-count dev))
+  (cond
+    ((faketerm-device-closed-p dev) :closed)
+    ((queue-empty-p (faketerm-device-in-queue dev))
+     (if (faketerm-device-eof-on-empty-p dev) :eof :would-block))
+    (t
+     (let ((chunk (queue-pop (faketerm-device-in-queue dev))))
+       (cond
+         ((keywordp chunk) chunk)
+         (t
+          (let ((count (min (length chunk) (- end start))))
+            (replace buffer chunk :start1 start :end1 (+ start count) :end2 count)
+            count)))))))
 
 (defmethod device-write-bytes ((dev faketerm-device) buffer start end)
   "Push BUFFER[start..end) as a chunk to the output queue.
 Returns the number of bytes written."
-  (queue-push (faketerm-device-out-queue dev) (subseq buffer start end))
-  (- end start))
+  (if (faketerm-device-write-function dev)
+      (funcall (faketerm-device-write-function dev) dev buffer start end)
+      (progn
+        (queue-push (faketerm-device-out-queue dev) (subseq buffer start end))
+        (- end start))))
 
 (defmethod device-capabilities ((dev faketerm-device))
   "Return a copy of the device's capabilities plist."
@@ -191,15 +243,19 @@ Returns the number of bytes written."
   (declare (ignore _modes))
   t)
 
-(defmethod device-set-nonblocking ((dev faketerm-device) _flag)
-  "Non-blocking toggles do not apply to the queue-backed faketerm device."
-  (declare (ignore dev _flag))
-  t)
+(defmethod device-set-nonblocking ((dev faketerm-device) flag)
+  (setf (faketerm-device-nonblocking-p dev) (not (null flag))))
 
-(defmethod device-wait-readable ((dev faketerm-device) _timeout-ms)
-  "Return true as soon as there is data waiting in the fake queue."
-  (declare (ignore _timeout-ms))
-  (not (queue-empty-p (faketerm-device-in-queue dev))))
+(defmethod device-wait-readable ((dev faketerm-device) timeout-ms)
+  "Deterministic readiness seam; WAIT-FUNCTION may advance an injected test clock."
+  (incf (faketerm-device-wait-count dev))
+  (cond
+    ((faketerm-device-closed-p dev) nil)
+    ((not (queue-empty-p (faketerm-device-in-queue dev))) t)
+    ((faketerm-device-eof-on-empty-p dev) t)
+    ((faketerm-device-wait-function dev)
+     (funcall (faketerm-device-wait-function dev) dev timeout-ms))
+    (t nil)))
 
 ;;; ---------------------------------------------------------------------------
 ;;; High-level terminal functionality
@@ -280,6 +336,10 @@ Returns the number of bytes written."
 (defmethod get-cursor-position ((dev faketerm-device))
   (values (faketerm-device-cursor-row dev)
     (faketerm-device-cursor-col dev)))
+
+(defmethod get-terminal-size ((dev faketerm-device))
+  (values (faketerm-device-width dev)
+    (faketerm-device-height dev)))
 
 (defmethod hide-cursor ((dev faketerm-device))
   (setf (faketerm-device-cursor-visible-p dev) nil)

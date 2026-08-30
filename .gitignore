@@ -6,6 +6,8 @@
 */coverage/
 /coverage/
 /.worktrees/
+/.cache/
+/.ws-bridge/
 
 ### Emacs ###
 # -*- mode: gitignore; -*-

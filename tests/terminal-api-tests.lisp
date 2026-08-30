@@ -4,7 +4,7 @@
   (:import-from :cl-inputs.terminal.api
                 #:clear-screen #:clear-area #:draw-text-at #:draw-char-at
                 #:fill-rectangle #:scroll-lines #:set-cursor-position
-                #:get-cursor-position #:hide-cursor #:show-cursor
+                #:get-cursor-position #:get-terminal-size #:hide-cursor #:show-cursor
                 #:apply-style #:reset-style)
   (:export #:terminal-api-tests))
 
@@ -50,6 +50,17 @@
     (multiple-value-bind (row col) (get-cursor-position dev)
       (is (= 2 row))
       (is (= 3 col)))))
+
+(test get-terminal-size-faketerm
+  (let ((dev (make-device :faketerm :width 17 :height 9)))
+    (multiple-value-bind (width height) (get-terminal-size dev)
+      (is (= 17 width))
+      (is (= 9 height)))))
+
+(test get-terminal-size-unsupported-target-is-unknown
+  (multiple-value-bind (width height) (get-terminal-size :unsupported)
+    (is (null width))
+    (is (null height))))
 
 (test hide-show-cursor-faketerm
   "Test hiding and showing cursor"

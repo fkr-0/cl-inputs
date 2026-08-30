@@ -3,6 +3,8 @@
   (:import-from :cl-inputs.api #:make-ready-input-source #:read-tokens)
   (:import-from :cl-inputs.loop #:next-token #:close-input-source)
   (:import-from :cl-inputs.device.api #:make-device)
+  (:import-from :cl-inputs.device.faketerm
+                #:faketerm-device-raw-depth #:faketerm-device-close-count)
   (:import-from :cl-inputs.tokens #:input-token-data)
   (:import-from :cl-inputs.util #:string-to-utf-8-bytes)
   (:export #:api-tests))
@@ -17,8 +19,11 @@
                               :script (list (string-to-utf-8-bytes "x"))))
          (source (make-ready-input-source :device device)))
     (unwind-protect
-         (is (char= #\x (getf (input-token-data (next-token source)) :code)))
-      (is-true (close-input-source source)))))
+         (progn
+           (is (= 1 (faketerm-device-raw-depth device)))
+           (is (char= #\x (getf (input-token-data (next-token source)) :code))))
+      (is-true (close-input-source source)))
+    (is (= 1 (faketerm-device-close-count device)))))
 
 (test read-tokens-faketerm
   (let* ((device (make-device :faketerm

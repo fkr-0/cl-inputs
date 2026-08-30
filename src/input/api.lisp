@@ -24,24 +24,27 @@
 ;;; All exported symbols should be documented and idiomatic.
 
 (defmacro with-raw-input ((dev) &body body)
-  "Open DEV and enable raw-char-mode + raw-mode for BODY; restore/close on exit."
-  `(progn
-     (unwind-protect
-       (progn
-         (cl-inputs.device.api:open-device ,dev)
-         (ignore-errors (cl-inputs.device.api:enable-raw-char-mode ,dev))
-         (cl-inputs.device.api:enable-raw-mode ,dev)
-         (log-info "> Enabled raw input on device ~A" ,dev)
-         ,@body)
-       (ignore-errors (cl-inputs.device.api:disable-raw-char-mode ,dev))
-       (ignore-errors (cl-inputs.device.api:disable-raw-mode ,dev))
-       (ignore-errors (cl-inputs.device.api:close-device ,dev)))))
+  "Own DEV for BODY: open once, enter raw-char mode once, and restore/close once."
+  (alexandria:with-gensyms (device opened-p raw-p)
+    `(let ((,device ,dev)
+           (,opened-p nil)
+           (,raw-p nil))
+       (unwind-protect
+         (progn
+           (cl-inputs.device.api:open-device ,device)
+           (setf ,opened-p t)
+           (cl-inputs.device.api:enable-raw-char-mode
+            ,device :vmin 1 :vtime 0 :canonical nil :echo nil :isig t)
+           (setf ,raw-p t)
+           (log-info "> Enabled raw input on device ~A" ,device)
+           ,@body)
+         (when ,raw-p
+           (ignore-errors (cl-inputs.device.api:disable-raw-char-mode ,device)))
+         (when ,opened-p
+           (ignore-errors (cl-inputs.device.api:close-device ,device)))))))
 
-(defun make-ready-input-source (&key (device (cl-inputs.device.api:make-device :tty)) (decoder (cl-inputs.decoder:make-decoder)))
-  "Open DEVICE, enable raw-char-mode, and return an input-source ready for next-token."
-  (cl-inputs.device.api:open-device device)
-  (ignore-errors (cl-inputs.device.api:enable-raw-char-mode device))
-  (cl-inputs.device.api:enable-raw-mode device)
+(defun make-ready-input-source (&key device decoder)
+  "Return an owned input source; lifecycle setup is centralized in MAKE-INPUT-SOURCE."
   (cl-inputs.loop:make-input-source :device device :decoder decoder))
 
 (defmacro with-input-source ((var &key (device '(cl-inputs.device.api:make-device :tty)) (decoder '(cl-inputs.decoder:make-decoder))) &body body)
@@ -70,11 +73,13 @@ Side Effects:
   Closes the input source after reading."
   (let ((src (cl-inputs.loop:make-input-source :device dev))
          (tokens '()))
-    (loop for tok = (cl-inputs.loop:next-token src :timeout timeout)
-      while tok
-      do (push tok tokens))
-    (cl-inputs.loop:close-input-source src)
-    (nreverse tokens)))
+    (unwind-protect
+      (progn
+        (loop for tok = (cl-inputs.loop:next-token src :timeout timeout)
+          while tok
+          do (push tok tokens))
+        (nreverse tokens))
+      (cl-inputs.loop:close-input-source src))))
 
 (defmacro with-async-signal (return-var &body body)
   "Run BODY in a background thread, allowing interruption and result retrieval.
