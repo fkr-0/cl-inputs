@@ -7,6 +7,7 @@
 /coverage/
 /.worktrees/
 /.cache/
+/dist/
 /.ws-bridge/
 
 ### Emacs ###
