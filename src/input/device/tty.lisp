@@ -395,7 +395,8 @@
   (and (%tty-in dev) (%tty-out dev)))
 
 (defmethod open-device ((dev tty-device))
-  (log:info "Opening TTY device at path ~a" (tty-device-path dev))
+  ;; Terminal startup must not emit INFO messages into the application screen.
+  (log:debug "Opening TTY device at path ~a" (tty-device-path dev))
   (unless (initialized-p dev)
     (let ((p (tty-device-path dev))
           (fd-in nil)
@@ -475,8 +476,12 @@
     (if (plusp (%tty-raw-depth dev))
       (incf (%tty-raw-depth dev))
       (let* ((orig (sb-posix:tcgetattr fd))
-              (tos  #+sbcl (sb-int:sys-copy-struct orig) #-sbcl orig)
-              (cc   (sb-posix:termios-cc tos)))
+              ;; SB-POSIX termios is a foreign-backed structure. SYS-COPY-STRUCT
+              ;; aliases its backing storage on supported SBCL builds, so
+              ;; mutating that 'copy' also destroys our restoration snapshot.
+              ;; Read a separate termios object for mutation instead.
+              (tos (sb-posix:tcgetattr fd))
+              (cc (sb-posix:termios-cc tos)))
         ;; INPUT flags: strip translations/flow-ctrl
         (setf (sb-posix:termios-iflag tos)
           (logand (sb-posix:termios-iflag tos)
