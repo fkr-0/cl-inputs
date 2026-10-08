@@ -1,0 +1,29 @@
+#!/bin/sh
+# Reproducible archive of a committed revision; fresh extracted-tree qualification.
+set -eu
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+revision=${1:-HEAD}
+outdir=${2:-"$repo/dist"}
+commit=$(git -C "$repo" rev-parse --verify "$revision^{commit}")
+mkdir -p "$outdir"
+outdir=$(CDPATH= cd -- "$outdir" && pwd)
+archive="$outdir/cl-inputs-$commit.tar.gz"
+git -C "$repo" archive --format=tar --prefix=cl-inputs/ "$commit" | gzip -n -9 > "$archive"
+sha256sum "$archive" > "$archive.sha256"
+printf 'archive=%s\ncommit=%s\n' "$archive" "$commit"
+if [ "${CL_INPUTS_SKIP_COLD_TEST:-0}" = 1 ]; then
+  printf 'cold-validation=SKIPPED (explicit override)\n'
+  exit 0
+fi
+scratch=$(mktemp -d)
+trap 'rm -rf "$scratch"' EXIT HUP INT TERM
+tar -xzf "$archive" -C "$scratch"
+cd "$scratch/cl-inputs"
+export CL_SOURCE_REGISTRY="$scratch/cl-inputs//"
+export CLPM_HOME="${CL_INPUTS_CLPM_HOME:-$repo/.cache/clpm}"
+clpm bundle install
+clpm bundle exec --with-client sbcl -- --noinform --non-interactive \
+  --eval '(require :asdf)' \
+  --eval '(asdf:load-system "cl-inputs")' \
+  --eval '(asdf:test-system "cl-inputs")'
+printf 'cold-validation=PASS\n'
