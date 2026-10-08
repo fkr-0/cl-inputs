@@ -8,7 +8,13 @@ commit=$(git -C "$repo" rev-parse --verify "$revision^{commit}")
 mkdir -p "$outdir"
 outdir=$(CDPATH= cd -- "$outdir" && pwd)
 archive="$outdir/cl-inputs-$commit.tar.gz"
-git -C "$repo" archive --format=tar --prefix=cl-inputs/ "$commit" | gzip -n -9 > "$archive"
+raw="$outdir/.cl-inputs-$commit.tar.$"
+trap 'rm -f "$raw"' EXIT HUP INT TERM
+# Do not mask a failed git archive behind a successful gzip pipeline.
+git -C "$repo" archive --format=tar --prefix=cl-inputs/ -o "$raw" "$commit"
+gzip -n -9 < "$raw" > "$archive"
+rm -f "$raw"
+trap - EXIT HUP INT TERM
 sha256sum "$archive" > "$archive.sha256"
 printf 'archive=%s\ncommit=%s\n' "$archive" "$commit"
 if [ "${CL_INPUTS_SKIP_COLD_TEST:-0}" = 1 ]; then
