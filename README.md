@@ -191,6 +191,24 @@ Core runtime: Alexandria, UIOP/ASDF, Bordeaux Threads, SB-POSIX on the qualified
 
 See [CHANGELOG.md](CHANGELOG.md).
 
+## Reproducible source release qualification
+
+Only committed content is included in the source archive; no tag, push, or
+publication is performed. From the standalone repository root:
+
+```sh
+sh bin/release-source HEAD
+sha256sum -c dist/cl-inputs-*.tar.gz.sha256
+```
+
+This builds a deterministic gzip archive with a commit-specific name, extracts
+it into a fresh temporary directory, then runs CLPM installation, ASDF load,
+and the standalone test-op. The supported target is SBCL on POSIX/Linux.
+Set `CL_INPUTS_CLPM_HOME` to reuse a local dependency cache. Setting
+`CL_INPUTS_SKIP_COLD_TEST=1` skips the qualification and produces only an
+archive; it does **not** establish release readiness. The inherited
+`v0.2.0` tag must not be moved.
+
 ## License
 
 MIT; see [LICENSE](LICENSE).
