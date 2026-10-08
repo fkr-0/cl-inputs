@@ -76,6 +76,45 @@ qualified rather than a live terminal portability claim.
 - terminal capability/mode helpers and typed cursor/status/device-attribute replies;
 - optional `cl-events` bus adapter.
 
+## Terminal end-to-end qualification
+
+The primary ASDF suite now includes terminal E2E tests, covering every
+two-chunk split of a mixed UTF-8/CSI/mouse/focus/bracketed-paste stream,
+byte-by-byte input, transient reads, EOF/truncation diagnostics, bounded paste
+overflow, response correlation and preservation of unrelated user keystrokes,
+scoped and borrowed lifecycle ownership, async token delivery, and fake-screen
+rendering. Run it with:
+
+    CLPM_HOME=.cache/clpm clpm bundle exec --with-client sbcl -- \
+      --noinform --non-interactive \
+      --eval '(require :asdf)' \
+      --eval '(asdf:test-system "cl-inputs")'
+
+Separately, the Linux PTY scenario is a real device end-to-end check. It opens
+a fresh pseudo-terminal using the actual :tty backend, injects fragmented
+UTF-8, key, mouse, focus, paste, malformed-control, and query-reply input
+across the master/slave boundary, verifies terminal control bytes on the
+master, and checks nested raw-mode flags plus normal and exceptional termios
+restoration on exit. It needs Python 3, Linux, SBCL and the installed CLPM bundle:
+
+    python3 tests/pty-e2e.py
+
+A higher-level application E2E suite adapts the private-tmux harness design
+from the ElmTUI application tests, but executes fresh standalone `cl-inputs`
+SBCL processes and does not load ElmTUI. It verifies typed input, arrow keys,
+bracketed paste, keyboard handling following a window resize, startup output
+isolation, captured terminal bytes, cursor visibility, termios restoration,
+and exceptional-unwind cleanup. Each case has a private tmux socket and
+separate raw-terminal, stderr, before/after-stty and screen-snapshot artifacts:
+
+    python3 tests/tmux-terminal-apps.py --timeout 20
+
+The PTY scenario is explicitly separate from ASDF so it does not silently pass
+by substituting faketerm when no PTY support is present. Terminal size is
+currently cached by the TTY API; dynamic SIGWINCH/size discovery is not
+promised or tested as implemented functionality. Neither suite claims coverage
+of non-SBCL or non-POSIX platforms.
+
 ## Loading
 
 ```lisp
