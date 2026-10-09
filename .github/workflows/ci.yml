@@ -18,7 +18,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y sbcl build-essential git curl ca-certificates bzip2
+          sudo apt-get install -y sbcl build-essential git curl ca-certificates bzip2 tmux
           git clone --depth 1 --branch sbcl-2.6.0 https://github.com/sbcl/sbcl.git /tmp/sbcl-2.6.0
           (cd /tmp/sbcl-2.6.0 && sh make.sh && sudo sh install.sh)
           command -v sbcl
@@ -41,6 +41,10 @@ jobs:
             --eval '(require :asdf)' --eval '(asdf:load-system "cl-inputs" :force t)'
       - name: Python threshold-gate tests
         run: python3 -m unittest discover -s tests -p test_coverage_gate.py -v
+      - name: Kernel PTY input and termios restoration
+        run: python3 tests/pty-e2e.py
+      - name: Private tmux terminal-app black-box tests
+        run: python3 tests/tmux-terminal-apps.py --timeout 20
       - name: FiveAM with SB-COVER instrumentation
         run: |
           CLPM_HOME=.cache/clpm clpm bundle exec --with-client sbcl -- \

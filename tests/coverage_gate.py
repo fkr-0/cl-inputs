@@ -23,6 +23,12 @@ def measure(lcov: Path, root: Path) -> dict:
     }
     if not expected:
         raise ValueError("No owned source files found")
+    # Reject impossible line numbers rather than accepting fabricated
+    # executable-line denominators or a report from stale source revisions.
+    line_counts = {
+        name: len((root / name).read_text(encoding="utf-8").splitlines())
+        for name in expected
+    }
     hits: dict[str, dict[int, int]] = {}
     current = None
     for number, raw in enumerate(lcov.read_text(encoding="utf-8").splitlines(), 1):
@@ -46,9 +52,16 @@ def measure(lcov: Path, root: Path) -> dict:
             if line < 1 or count < 0:
                 raise ValueError(f"Invalid DA at LCOV line {number}")
             if current in expected:
+                if line > line_counts[current]:
+                    raise ValueError(
+                        f"DA line {line} exceeds {current} "
+                        f"({line_counts[current]} source lines)"
+                    )
                 previous = hits[current].get(line, 0)
                 hits[current][line] = max(previous, count)
         elif raw == "end_of_record":
+            if current is None:
+                raise ValueError(f"end_of_record without SF at LCOV line {number}")
             current = None
     if current is not None:
         raise ValueError("Unterminated LCOV source record")
