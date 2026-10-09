@@ -25,6 +25,9 @@
  (merge-pathnames "placeholder" *cl-inputs-coverage-directory*))
 
 (sb-cover:clear-coverage)
+;; LCOV's per-line source location vectors are populated at compile time only
+;; when this hook is enabled. Without it HTML succeeds but LCOV crashes.
+(sb-cover:enable-coverage-logging)
 (declaim (optimize (sb-cover:store-coverage-data 3)))
 (asdf:load-system "cl-inputs" :force t)
 (declaim (optimize (sb-cover:store-coverage-data 0)))
