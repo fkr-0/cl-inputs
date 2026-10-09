@@ -1,5 +1,10 @@
 # cl-inputs
 
+[![CI](https://github.com/fkr-0/cl-inputs/actions/workflows/ci.yml/badge.svg)](https://github.com/fkr-0/cl-inputs/actions/workflows/ci.yml)
+[![Measured coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ffkr-0%2Fcl-inputs%2Fgh-pages%2Fcoverage-badge.json)](https://github.com/fkr-0/cl-inputs/actions/workflows/ci.yml)
+
+The coverage badge is generated only after a successful main-branch CI run; it is not a static claim.
+
 `cl-inputs` is a reusable terminal-input library for Common Lisp. It owns byte decoding, semantic input tokens, terminal device ports, fake terminals, sinks, and synchronous/asynchronous input loops. ElmTUI consumes these APIs but is not part of the library.
 
 ## Release status
@@ -219,6 +224,29 @@ CLPM_HOME=.cache/clpm clpm bundle exec --with-client sbcl -- \
 ```
 
 One TTY-specific test may be skipped in non-interactive processes without a controlling terminal; that environment skip is explicitly reported rather than silently passed.
+
+## Measured source coverage
+
+The CI workflow compiles with SBCL 2.6.0 SB-COVER instrumentation, runs the
+FiveAM suite, produces HTML and LCOV artifacts, and enforces **at least 85%**
+measured line coverage. The denominator is the distinct instrumented `DA`
+lines in all core `src/input/**/*.lisp` and `src/terminal/**/*.lisp`
+files. It excludes `src/input/events-adapter.lisp` because that file belongs
+to the optional `cl-inputs/events` ASDF system, which is not installed in
+the core CLPM bundle, and `src/input/package.lisp`, which contains only
+package declarations without executable runtime code. Tests and transitive
+dependency files are also excluded.
+Missing or entirely uninstrumented core files fail the gate rather than
+artificially improving its percentage. The CI artifact includes per-file
+covered/instrumented line counts and the exclusion list. Published badge JSON
+on `gh-pages` is updated only after successful main-branch qualification.
+
+After installing CLPM and SBCL >= 2.6.0, run locally:
+
+    CLPM_HOME=.cache/clpm clpm bundle exec --with-client sbcl -- \\
+      --noinform --non-interactive --load coverage.lisp
+    python3 -m unittest discover -s tests -p test_coverage_gate.py -v
+    python3 tests/coverage_gate.py coverage/coverage.info --min 85
 
 ## Dependencies
 

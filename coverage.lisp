@@ -1,39 +1,49 @@
-;;; coverage.lisp - Test coverage for cl-inputs system
-;;; Usage: clpm bundle exec --with-client sbcl -- --noinform --load coverage.lisp
-
-(in-package :cl)
-
-(defvar *root* (uiop:pathname-directory-pathname *load-truename*))
-(defvar *coverage-dir* (merge-pathnames #p"coverage/" *root*))
-
-;;; Load SB-COVER for code coverage
+;;; Reproducible core-only SBCL/ASDF coverage runner.
+;;; CLPM_HOME=.cache/clpm clpm bundle exec --with-client sbcl -- --noinform
+;;;   --non-interactive --load coverage.lisp
+(require :asdf)
 (require :sb-cover)
+(in-package :cl-user)
 
-;;; Turn on generation of code coverage instrumentation in the compiler
-(declaim (optimize sb-cover:store-coverage-data))
+;; SB-COVER:LCOV-REPORT first shipped with SBCL 2.6.0. No silent HTML
+;; approximation: CI must use a compiler with real source-line coverage.
+(unless (and (find-symbol "LCOV-REPORT" :sb-cover)
+             (fboundp (find-symbol "LCOV-REPORT" :sb-cover)))
+  (error "SBCL ~A lacks SB-COVER:LCOV-REPORT; install SBCL >= 2.6.0"
+         (lisp-implementation-version)))
 
-;;; Clean and create coverage directory
-(when (uiop:directory-exists-p *coverage-dir*)
-  (uiop:delete-directory-tree *coverage-dir* :validate t :if-does-not-exist :ignore))
-(ensure-directories-exist *coverage-dir*)
+(defparameter *cl-inputs-root*
+  (uiop:pathname-directory-pathname *load-truename*))
+(defparameter *cl-inputs-coverage-directory*
+  (merge-pathnames "coverage/" *cl-inputs-root*))
 
-;;; Load and force recompile main system with coverage instrumentation
-;;; Load test system WITHOUT force to avoid instrumenting test code
+;; Remove stale measurements, including failed/partial previous invocations.
+(when (uiop:directory-exists-p *cl-inputs-coverage-directory*)
+  (uiop:delete-directory-tree *cl-inputs-coverage-directory*
+                              :validate t :if-does-not-exist :ignore))
+(ensure-directories-exist
+ (merge-pathnames "placeholder" *cl-inputs-coverage-directory*))
+
+(sb-cover:clear-coverage)
+(declaim (optimize (sb-cover:store-coverage-data 3)))
 (asdf:load-system "cl-inputs" :force t)
+(declaim (optimize (sb-cover:store-coverage-data 0)))
+
+;; Test files and transitive dependencies must not enter the owned-code
+;; denominator; the Python gate also uses an explicit source inventory.
 (asdf:load-system "cl-inputs/tests")
+(uiop:symbol-call :cl-inputs.tests :run-all-cl-inputs-tests)
 
-;;; Run the test suite and capture result
-(let ((test-result (funcall (find-symbol "RUN-ALL-CL-INPUTS-TESTS" (find-package "CL-INPUTS.TESTS")))))
-  (declare (ignorable test-result))
+(sb-cover:report
+ *cl-inputs-coverage-directory*
+ :if-matches
+ (lambda (filename)
+   (let ((src (namestring (merge-pathnames "src/" *cl-inputs-root*))))
+     (and (<= (length src) (length filename))
+          (string= src filename :end2 (length src))))))
 
-  ;; Generate coverage report
-  (sb-cover:report *coverage-dir*)
-
-  (format t "~&=== Coverage Report Generated ===~%")
-  (format t "HTML: ~A~%" (merge-pathnames #p"cover-index.html" *coverage-dir*))
-
-  ;; Clean up - turn off coverage instrumentation
-  (declaim (optimize (sb-cover:store-coverage-data 0)))
-
-  ;; Exit with appropriate code
-  (uiop:quit 0))
+(funcall (symbol-function (find-symbol "LCOV-REPORT" :sb-cover))
+         (merge-pathnames "coverage.info" *cl-inputs-coverage-directory*))
+(format t "~&Generated SB-COVER HTML + LCOV in ~A~%"
+        *cl-inputs-coverage-directory*)
+(uiop:quit 0)

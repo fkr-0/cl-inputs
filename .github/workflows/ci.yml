@@ -1,0 +1,73 @@
+name: CI
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  test-coverage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SBCL 2.6.0 toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y sbcl build-essential git curl ca-certificates bzip2
+          git clone --depth 1 --branch sbcl-2.6.0 https://github.com/sbcl/sbcl.git /tmp/sbcl-2.6.0
+          (cd /tmp/sbcl-2.6.0 && sh make.sh && sudo sh install.sh)
+          command -v sbcl
+          sbcl --version
+      - name: Install CLPM 0.4.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            https://files.clpm.dev/clpm/clpm-0.4.1-linux-amd64.tar.gz -o /tmp/clpm.tar.gz
+          tar -xzf /tmp/clpm.tar.gz -C /tmp
+          (cd /tmp/clpm-0.4.1-linux-amd64 && sudo sh install.sh)
+          command -v clpm
+          clpm --help >/dev/null
+      - name: Install pinned dependencies
+        run: CLPM_HOME=.cache/clpm clpm bundle install
+      - name: Compile standalone core
+        run: |
+          CLPM_HOME=.cache/clpm clpm bundle exec --with-client sbcl -- --noinform --non-interactive \
+            --eval '(require :asdf)' --eval '(asdf:load-system "cl-inputs" :force t)'
+      - name: Python threshold-gate tests
+        run: python3 -m unittest discover -s tests -p test_coverage_gate.py -v
+      - name: FiveAM with SB-COVER instrumentation
+        run: |
+          CLPM_HOME=.cache/clpm clpm bundle exec --with-client sbcl -- \
+            --noinform --non-interactive --load coverage.lisp
+      - name: Enforce measured line coverage >= 85%
+        run: python3 tests/coverage_gate.py coverage/coverage.info --min 85
+      - name: Upload HTML LCOV and source-denominator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cl-inputs-coverage
+          path: |
+            coverage/cover*.html
+            coverage/coverage.info
+            coverage/coverage.json
+            coverage/coverage-badge.json
+          if-no-files-found: warn
+      - name: Prepare public badge and HTML
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p coverage/public
+          find coverage -maxdepth 1 -type f -exec cp {} coverage/public/ \;
+      - name: Publish verified coverage to gh-pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./coverage/public
+          force_orphan: false

@@ -375,3 +375,16 @@
       (is (null wait-result))
       (is (eq :cancelled (response-correlation-state correlation)))
       (is (eq :cancelled (input-source-state source))))))
+
+(test invalid-read-timeout-is-error-and-closes-source-exactly-once
+  "A malformed public read timeout must not strand the raw device lifecycle."
+  (let* ((device (make-device :faketerm :eof-on-empty-p nil))
+         (source (make-input-source :device device)))
+    (signals error (next-token source :timeout -0.1d0))
+    (is (eq :error (input-source-state source)))
+    (is-true (faketerm-device-closed-p device))
+    (is (= 0 (faketerm-device-raw-depth device)))
+    (is (= 1 (faketerm-device-close-count device)))
+    (is (null (next-token source :timeout 0)))
+    (is-true (close-input-source source))
+    (is (= 1 (faketerm-device-close-count device)))))
