@@ -34,8 +34,22 @@ class CoverageGateTest(unittest.TestCase):
         outcome = measure(self.lcov, self.root)
         self.assertEqual((1, 2), (outcome["covered_lines"], outcome["instrumented_lines"]))
         self.assertEqual(
-            ["src/input/device/urxvt.lisp", "src/input/events-adapter.lisp", "src/input/package.lisp"],
+            ["src/input/events-adapter.lisp", "src/input/package.lisp"],
             outcome["excluded_files"])
+
+    def test_urxvt_is_owned_and_missing_urxvt_fails_closed(self):
+        source = "src/input/device/urxvt.lisp"
+        path = self.root / source
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("(defun urxvt-read () t)\n")
+        self.lcov.write_text(self.record("src/input/core.lisp", [(1, 1), (2, 0)]))
+        with self.assertRaisesRegex(ValueError, "urxvt.lisp"):
+            measure(self.lcov, self.root)
+        self.lcov.write_text(self.lcov.read_text() + self.record(source, [(1, 0)]))
+        result = measure(self.lcov, self.root)
+        self.assertEqual((1, 3),
+                         (result["covered_lines"], result["instrumented_lines"]))
+        self.assertIn(source, result["per_file"])
 
     def test_duplicate_das_do_not_inflate_denominator(self):
         self.lcov.write_text(
