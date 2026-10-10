@@ -43,3 +43,5 @@ tramp
 
 # cask packages
 .cask/
+# Python PTY smoke cache
+**/__pycache__/
