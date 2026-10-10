@@ -10,6 +10,8 @@
 
 :sources
 (:implicit-file :type :file-system :system-files ("./cl-inputs.asd"))
+(:implicit-vcs :type :vcs :projects
+ (("log4cl" :github :path "sharplispers/log4cl")))
 (:implicit-vcs :type :vcs :projects (("fiveam" :github :path "lispci/fiveam")))
 ("quicklisp" :url "https://quicklisp.common-lisp-project-index.org/" :type
  :clpi)
@@ -20,7 +22,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 :requirements
-(:system :name "log4cl" :source "quicklisp")
+(:project :name "log4cl" :commit "fe3da517147d023029782ced7cd989ba24f1e62d"
+ :source :implicit-vcs)
 (:system :name "bordeaux-threads")
 (:system :name "alexandria" :source "quicklisp")
 (:project :name "fiveam" :commit "e11dee752a8f59065033ef9d60641d4a2f1e8379"
@@ -41,7 +44,16 @@
  ("bordeaux-threads"))
 ("fiveam" :version (:commit "e11dee752a8f59065033ef9d60641d4a2f1e8379") :source
  :implicit-vcs :systems ("fiveam" "fiveam/test"))
-("log4cl" :version "2021-12-09" :source "quicklisp" :systems ("log4cl"))
+("iterate" :version "2021-05-31" :source "quicklisp" :systems ("iterate"))
+("log4cl" :version (:commit "fe3da517147d023029782ced7cd989ba24f1e62d") :source
+ :implicit-vcs :systems
+ ("log4cl" "log4cl-examples" "log4cl.log4slime" "log4cl.log4sly"
+  "log4cl/syslog" "log4cl/test"))
+("metabang-bind" :version "2020-02-18" :source "quicklisp" :systems
+ ("metabang-bind"))
+("slime" :version "2022-02-20" :source "quicklisp" :systems ("swank"))
+("sly" :version "2022-07-08" :source "quicklisp" :systems ("slynk"))
+("stefil" :version "2018-12-10" :source "quicklisp" :systems ("stefil"))
 ("trivial-backtrace" :version "2020-06-10" :source "quicklisp" :systems
  ("trivial-backtrace"))
 
@@ -53,7 +65,8 @@
 :reverse-dependencies
 ("./cl-inputs.asd" (t (:asd-file :name "./cl-inputs.asd")))
 
-("alexandria" ((:system :name "fiveam") (:system :name "alexandria"))
+("alexandria" ((:system :name "stefil") (:system :name "alexandria"))
+ ((:system :name "fiveam") (:system :name "alexandria"))
  ((:system :name "bordeaux-threads") (:system :name "alexandria"))
  (t (:system :name "alexandria" :source "quicklisp")))
 
@@ -69,7 +82,27 @@
   (:project :name "fiveam" :commit "e11dee752a8f59065033ef9d60641d4a2f1e8379"
    :source :implicit-vcs)))
 
-("log4cl" (t (:system :name "log4cl" :source "quicklisp")))
+("iterate" ((:system :name "stefil") (:system :name "iterate")))
+
+("log4cl" ((:system :name "log4cl/test") (:system :name "log4cl"))
+ ((:system :name "log4cl/syslog") (:system :name "log4cl"))
+ ((:system :name "log4cl.log4sly") (:system :name "log4cl"))
+ ((:system :name "log4cl.log4slime") (:system :name "log4cl"))
+ ((:system :name "log4cl-examples") (:system :name "log4cl"))
+ (t
+  (:project :name "log4cl" :commit "fe3da517147d023029782ced7cd989ba24f1e62d"
+   :source :implicit-vcs)))
+
+("metabang-bind" ((:system :name "stefil") (:system :name "metabang-bind")))
+
+("slime" ((:system :name "stefil") (:system :name "swank"))
+ ((:system :name "log4cl.log4slime") (:system :name "swank"))
+ ((:system :name "log4cl-examples") (:system :name "swank")))
+
+("sly" ((:system :name "log4cl.log4sly") (:system :name "slynk")))
+
+("stefil" ((:system :name "log4cl/test") (:system :name "stefil")))
 
 ("trivial-backtrace"
  ((:system :name "fiveam") (:system :name "trivial-backtrace")))
+
