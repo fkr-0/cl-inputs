@@ -575,21 +575,25 @@
                      (let ((type (pop-param)))
                        (cond
                          ((= type 5) ; 256-color mode
-                           (when (>= (params-left) 1)
-                             (push (list :fg-color `(:type :xterm :value ,(pop-param))) changes)))
+                           (if (>= (params-left) 1)
+                               (push (list :fg-color `(:type :xterm :value ,(pop-param))) changes)
+                               (setf i (length sgr-params-list))))
                          ((= type 2) ; Truecolor mode
-                           (when (>= (params-left) 3)
-                             (push (list :fg-color `(:type :rgb :r ,(pop-param) :g ,(pop-param) :b ,(pop-param))) changes)))))))
+                           (if (>= (params-left) 3)
+                               (push (list :fg-color `(:type :rgb :r ,(pop-param) :g ,(pop-param) :b ,(pop-param))) changes)
+                               (setf i (length sgr-params-list))))))))
                  ((= p 48) ; Extended background color
                    (when (>= (params-left) 1)
                      (let ((type (pop-param)))
                        (cond
                          ((= type 5)
-                           (when (>= (params-left) 1)
-                             (push (list :bg-color `(:type :xterm :value ,(pop-param))) changes)))
+                           (if (>= (params-left) 1)
+                               (push (list :bg-color `(:type :xterm :value ,(pop-param))) changes)
+                               (setf i (length sgr-params-list))))
                          ((= type 2)
-                           (when (>= (params-left) 3)
-                             (push (list :bg-color `(:type :rgb :r ,(pop-param) :g ,(pop-param) :b ,(pop-param))) changes)))))))
+                           (if (>= (params-left) 3)
+                               (push (list :bg-color `(:type :rgb :r ,(pop-param) :g ,(pop-param) :b ,(pop-param))) changes)
+                               (setf i (length sgr-params-list))))))))
                  (t (warn "Unknown SGR parameter: ~A" p))))))
       (nreverse changes)))
 

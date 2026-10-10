@@ -77,10 +77,13 @@
         (when condition
           (is (search (car case) (princ-to-string condition))))))))
 
-(test lockable-unwind-cleanup
-  "Single lock ownership must release on error; recursive acquire is a known defect."
+(test lockable-recursion-and-unwind-cleanup
+  "Nested ownership and exceptional unwind release the underlying lock once."
   (let ((object (make-instance 'cl-inputs.device.api:lockable)))
     (is (eq object (cl-inputs.device.api:acquire-lock object)))
+    (is (= 1 (cl-inputs.device.api::lock-owner-count object)))
+    (cl-inputs.device.api:with-lock (object)
+      (is (= 2 (cl-inputs.device.api::lock-owner-count object))))
     (is (= 1 (cl-inputs.device.api::lock-owner-count object)))
     (cl-inputs.device.api:release-lock object)
     (is (= 0 (cl-inputs.device.api::lock-owner-count object)))
