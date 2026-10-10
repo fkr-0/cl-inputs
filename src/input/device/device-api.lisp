@@ -389,12 +389,15 @@ the current thread."
   (let ((current-thread (bt:current-thread)))
     (with-slots (lock lock-owner lock-owner-count)
       l
-      (bt:acquire-lock lock t) ; Ensure the lock is acquired before checking owner
+      ;; BT:ACQUIRE-LOCK rejects a second acquisition of the same recursive
+      ;; mutex on some SBCL/Bordeaux Threads combinations. Track reentry
+      ;; before acquiring the underlying mutex; only the first entry locks.
       (if (eq lock-owner current-thread)
-        (incf (the fixnum lock-owner-count))
-        (progn
-          (setf lock-owner current-thread)
-          (setf lock-owner-count 1)))))
+          (incf (the fixnum lock-owner-count))
+          (progn
+            (bt:acquire-lock lock t)
+            (setf lock-owner current-thread
+                  lock-owner-count 1)))))
   l) ; Return the lockable object
 
 (defmethod release-lock ((l lockable))
