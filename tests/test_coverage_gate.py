@@ -33,7 +33,9 @@ class CoverageGateTest(unittest.TestCase):
             + self.record("src/input/events-adapter.lisp", [(1, 0)]))
         outcome = measure(self.lcov, self.root)
         self.assertEqual((1, 2), (outcome["covered_lines"], outcome["instrumented_lines"]))
-        self.assertEqual(["src/input/events-adapter.lisp", "src/input/package.lisp"], outcome["excluded_files"])
+        self.assertEqual(
+            ["src/input/device/urxvt.lisp", "src/input/events-adapter.lisp", "src/input/package.lisp"],
+            outcome["excluded_files"])
 
     def test_duplicate_das_do_not_inflate_denominator(self):
         self.lcov.write_text(

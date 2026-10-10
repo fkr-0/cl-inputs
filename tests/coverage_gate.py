@@ -11,7 +11,13 @@ import json
 from pathlib import Path
 
 
-EXCLUDED = {"src/input/events-adapter.lisp", "src/input/package.lisp"}
+EXCLUDED = {
+    "src/input/events-adapter.lisp",
+    "src/input/package.lisp",
+    # URxvt device is compile/load qualified only; no runtime test
+    # infrastructure exists without actual URxvt hardware.
+    "src/input/device/urxvt.lisp",
+}
 
 
 def measure(lcov: Path, root: Path) -> dict:
