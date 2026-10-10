@@ -47,3 +47,47 @@
     (is (typep condition 'device-error))
     (is (search "Unsupported device operation OPEN-DEVICE"
                 (princ-to-string condition)))))
+
+(test unsupported-device-protocol-methods-fail-closed
+  "Every documented fallback must signal a reportable DEVICE-ERROR."
+  (let ((bad (list :not-a-device))
+        (bytes (make-array 2 :element-type '(unsigned-byte 8)
+                           :initial-contents '(65 66))))
+    (dolist (case (list
+                   (cons "CLOSE-DEVICE" (lambda () (close-device bad)))
+                   (cons "ENABLE-RAW-MODE" (lambda () (enable-raw-mode bad)))
+                   (cons "DISABLE-RAW-MODE" (lambda () (disable-raw-mode bad)))
+                   (cons "DEVICE-READ-BYTES"
+                         (lambda () (cl-inputs.device.api:device-read-bytes bad bytes 0 2)))
+                   (cons "DEVICE-WRITE-BYTES"
+                         (lambda () (cl-inputs.device.api:device-write-bytes bad bytes 0 2)))
+                   (cons "DEVICE-INPUT-STREAM"
+                         (lambda () (cl-inputs.device.api:device-input-stream bad)))
+                   (cons "DEVICE-OUTPUT-STREAM"
+                         (lambda () (cl-inputs.device.api:device-output-stream bad)))
+                   (cons "DEVICE-FD"
+                         (lambda () (cl-inputs.device.api:device-fd bad)))
+                   (cons "DEVICE-CAPABILITIES"
+                         (lambda () (device-capabilities bad)))
+                   (cons "DEVICE-SET-MODES"
+                         (lambda () (cl-inputs.device.api:device-set-modes bad '(:paste t))))))
+      (let ((condition (handler-case (progn (funcall (cdr case)) nil)
+                         (device-error (error) error))))
+        (is (typep condition 'device-error))
+        (when condition
+          (is (search (car case) (princ-to-string condition))))))))
+
+(test lockable-unwind-cleanup
+  "Single lock ownership must release on error; recursive acquire is a known defect."
+  (let ((object (make-instance 'cl-inputs.device.api:lockable)))
+    (is (eq object (cl-inputs.device.api:acquire-lock object)))
+    (is (= 1 (cl-inputs.device.api::lock-owner-count object)))
+    (cl-inputs.device.api:release-lock object)
+    (is (= 0 (cl-inputs.device.api::lock-owner-count object)))
+    (signals error
+      (cl-inputs.device.api:with-lock (object)
+        (error "Injected failure while owning a recursive lock.")))
+    (is (= 0 (cl-inputs.device.api::lock-owner-count object)))
+    (cl-inputs.device.api:with-lock (object)
+      (is (= 1 (cl-inputs.device.api::lock-owner-count object))))
+    (is (= 0 (cl-inputs.device.api::lock-owner-count object)))))

@@ -49,8 +49,8 @@ jobs:
         run: |
           CLPM_HOME=.cache/clpm clpm bundle exec --with-client sbcl -- \
             --noinform --non-interactive --load coverage.lisp
-      - name: Enforce measured line coverage >= 49%
-        run: python3 tests/coverage_gate.py coverage/coverage.info --min 49
+      - name: Enforce measured line coverage >= 85%
+        run: python3 tests/coverage_gate.py coverage/coverage.info --min 85
       - name: Upload HTML LCOV and source-denominator evidence
         if: always()
         uses: actions/upload-artifact@v4
