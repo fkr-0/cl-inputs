@@ -130,3 +130,28 @@
   (is (eq :c-s-a (canonicalize-key #\a :ctrl t :shift t)))
   (is (eq :c-m-a (canonicalize-key #\a :ctrl t :alt t)))
   (is (eq :c-m-s-a (canonicalize-key #\a :shift t :ctrl t :alt t))))
+
+(test lookup-seq-exhaustively-covers-declared-default-bindings
+  "Every built-in key mapping must remain reachable from its byte sequence."
+  (dolist (entry *default-keymap*)
+    (destructuring-bind (bytes name) entry
+      (is (eq name (lookup-seq (coerce bytes '(vector (unsigned-byte 8))))))))
+  (is (null (lookup-seq #())))
+  (is (null (lookup-seq #(255 254 253)))))
+
+(test lookup-seq-honors-caller-supplied-table
+  (let ((table '(((1 2 3) :one) ((1 2) :short))))
+    (is (eq :one (lookup-seq #(1 2 3) table)))
+    (is (eq :short (lookup-seq #(1 2) table)))
+    (is (null (lookup-seq #(1 2 3 4) table)))
+    (is (null (lookup-seq #(1 2 3) nil)))))
+
+(test canonicalize-key-special-keys-and-input-validation
+  (is (eq :tab (canonicalize-key #\Tab)))
+  (is (eq :enter (canonicalize-key #\Return)))
+  (is (eq :backspace (canonicalize-key #\Backspace)))
+  (is (eq :escape (canonicalize-key #\Esc)))
+  (is (eq :c-m-escape (canonicalize-key #\Esc :ctrl t :alt t)))
+  (is (eq :s-colon (canonicalize-key #\: :shift t)))
+  (fiveam:signals type-error (canonicalize-key nil))
+  (fiveam:signals type-error (canonicalize-key 10)))
