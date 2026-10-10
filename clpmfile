@@ -11,4 +11,6 @@
 
 (:system "alexandria" :source "quicklisp")
 (:system "bordeaux-threads")
-(:system "log4cl" :source "quicklisp")
+(:github "log4cl"
+ :path "sharplispers/log4cl"
+ :commit "fe3da517147d023029782ced7cd989ba24f1e62d")
