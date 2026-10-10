@@ -361,8 +361,8 @@ All fields are required unless otherwise noted."
   (let ((in-fd (term-in-fd term)))
     (let* ((orig (or (urxvt-device-original-termios term)
                    (sb-posix:tcgetattr in-fd)))
-            (tos  #+sbcl (sb-int:sys-copy-struct orig) #-sbcl orig)
-            (cc   (sb-posix:termios-cc tos)))
+            (tos (sb-posix:tcgetattr in-fd))
+            (cc  (sb-posix:termios-cc tos)))
       ;; Local flags
       (let ((l (sb-posix:termios-lflag tos)))
         (setf l (if canonical (logior l sb-posix:icanon)
@@ -624,7 +624,7 @@ This macro:
 ;;     (let ((termios (sb-posix:tcgetattr in-fd)))
 
 ;;       (let* ((orig (sb-posix:tcgetattr in-fd))
-;;               (tos  #+sbcl (sb-int:sys-copy-struct orig) #-sbcl orig)
+;;               (tos (sb-posix:tcgetattr in-fd))
 ;;               (cc   (sb-posix:termios-cc tos)))
 ;;         (setf (sb-posix:termios-lflag termios)
 ;;           (logand (lognot sb-posix:icanon) (lognot sb-posix:echo)))
