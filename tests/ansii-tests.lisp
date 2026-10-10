@@ -1,6 +1,6 @@
 (uiop:define-package :cl-inputs.tests.ansii
   (:use :cl)
-  (:import-from :fiveam #:def-suite #:in-suite #:test #:is #:is-true #:is-false)
+  (:import-from :fiveam #:def-suite #:in-suite #:test #:is #:is-true #:is-false #:signals)
   (:import-from :cl-inputs.terminal.ansii
                 #:introducer #:introducer-name #:introducer-code #:*introducers*
                 #:*ansi-keys* #:lookup-sequence #:get-sequence #:render-seq
@@ -163,3 +163,62 @@
     (is-true (getf (first parsed) :bold))
     (is (eq :red (getf (second parsed) :fg-color)))
     (is (eq :blue (getf (third parsed) :bg-color)))))
+
+(test ansi-render-placeholder-and-argument-shapes
+  "Explicit placeholder rendering is stable for supplied and NIL arguments."
+  (let ((fixture (cl-inputs.terminal.ansii:make-ansi-sequence
+                  :identifier :test-cursor
+                  :seq '("ESC" "[" nil ";" nil "H"))))
+    (is (string= (format nil "~C[4;7H" #\Esc)
+                 (render-seq fixture 4 7)))
+    (is (string= (format nil "~C[;7H" #\Esc)
+                 (render-seq fixture nil 7)))
+    (is (= 2 (cl-inputs.terminal.ansii:number-of-arguments fixture)))
+    (is (eq fixture (lookup-sequence fixture)))))
+
+(test ansi-style-color-encoding-variants
+  "Named, indexed, RGB and reset colors produce actual terminal escapes."
+  (is (string= (format nil "~C[39m" #\Esc) (ansi-fg-color-seq nil)))
+  (is (string= (format nil "~C[49m" #\Esc) (ansi-bg-color-seq nil)))
+  (is (string= (format nil "~C[38;5;196m" #\Esc)
+               (ansi-fg-color-seq 196)))
+  (is (string= (format nil "~C[48;5;27m" #\Esc)
+               (ansi-bg-color-seq 27)))
+  (is (string= (format nil "~C[38;2;1;2;3m" #\Esc)
+               (ansi-fg-color-seq '(1 2 3))))
+  (is (string= (format nil "~C[48;2;8;9;10m" #\Esc)
+               (ansi-bg-color-seq '(8 9 10))))
+  (is (string= (format nil "~C[24m" #\Esc)
+               (ansi-attr-seq :underline nil))))
+
+(test ansi-csi-boundary-and-report-cases
+  "Only final bytes terminate CSI; truncated CSI must signal a parse error."
+  (is (cl-inputs.terminal.ansii:is-csi-final-byte? 64))
+  (is (cl-inputs.terminal.ansii:is-csi-final-byte? 126))
+  (is (not (cl-inputs.terminal.ansii:is-csi-final-byte? 63)))
+  (is (not (cl-inputs.terminal.ansii:is-csi-final-byte? 127)))
+  (signals error (parse-csi-sequence (list 49 59 50)))
+  (is (eq :report-cursor-position
+          (getf (parse-csi-sequence (list 54 110)) :type)))
+  (is (eq :report-device-status
+          (getf (parse-csi-sequence (list 53 110)) :type)))
+  (is (eq :device-status-report
+          (getf (parse-csi-sequence (list 55 110)) :type)))
+  (is (eq :unknown-csi
+          (getf (parse-csi-sequence (list 49 122)) :type))))
+
+(test ansi-extended-sgr-parse
+  "Extended SGR values preserve channels; incomplete colors do not fabricate values."
+  (let ((changes (parse-sgr-parameters '(38 5 196 48 2 12 34 56))))
+    (is (equal '(:fg-color (:type :xterm :value 196))
+               (first changes)))
+    (is (equal '(:bg-color (:type :rgb :r 12 :g 34 :b 56))
+               (second changes))))
+  (is (notany (lambda (change) (getf change :fg-color))
+              (parse-sgr-parameters '(38 2 2 3))))
+  (is (null (parse-sgr-parameters '(48 5))))
+  (is (equal '((:bold nil) (:faint nil))
+             (parse-sgr-parameters '(22))))
+  (is (equal '(1 2 3)
+             (cl-inputs.terminal.ansii:parse-parameters
+              (list #\1 #\; #\2 #\: #\3)))))
