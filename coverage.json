@@ -1,0 +1,79 @@
+{
+  "covered_lines": 2214,
+  "excluded_files": [
+    "src/input/events-adapter.lisp",
+    "src/input/package.lisp"
+  ],
+  "instrumented_lines": 4182,
+  "line_coverage_percent": 52.94,
+  "per_file": {
+    "src/input/adapters.lisp": {
+      "covered": 36,
+      "instrumented": 46
+    },
+    "src/input/api.lisp": {
+      "covered": 49,
+      "instrumented": 100
+    },
+    "src/input/decoder.lisp": {
+      "covered": 202,
+      "instrumented": 240
+    },
+    "src/input/device/device-api.lisp": {
+      "covered": 148,
+      "instrumented": 263
+    },
+    "src/input/device/faketerm.lisp": {
+      "covered": 211,
+      "instrumented": 311
+    },
+    "src/input/device/tty.lisp": {
+      "covered": 54,
+      "instrumented": 414
+    },
+    "src/input/device/urxvt.lisp": {
+      "covered": 115,
+      "instrumented": 457
+    },
+    "src/input/escape.lisp": {
+      "covered": 12,
+      "instrumented": 19
+    },
+    "src/input/keymap.lisp": {
+      "covered": 26,
+      "instrumented": 64
+    },
+    "src/input/loop.lisp": {
+      "covered": 410,
+      "instrumented": 588
+    },
+    "src/input/protocol.lisp": {
+      "covered": 444,
+      "instrumented": 606
+    },
+    "src/input/routing.lisp": {
+      "covered": 181,
+      "instrumented": 235
+    },
+    "src/input/sink.lisp": {
+      "covered": 27,
+      "instrumented": 44
+    },
+    "src/input/tokens.lisp": {
+      "covered": 14,
+      "instrumented": 28
+    },
+    "src/input/util.lisp": {
+      "covered": 44,
+      "instrumented": 57
+    },
+    "src/terminal/ansii.lisp": {
+      "covered": 209,
+      "instrumented": 565
+    },
+    "src/terminal/api.lisp": {
+      "covered": 32,
+      "instrumented": 145
+    }
+  }
+}
