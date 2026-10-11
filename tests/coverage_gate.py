@@ -102,11 +102,14 @@ def main() -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     passed = result["covered_lines"] * 100 >= args.minimum * result["instrumented_lines"]
+    color = "red"
+    if passed:
+        color = "brightgreen" if result["line_coverage_percent"] >= 90 else "green"
     badge = {
         "schemaVersion": 1,
         "label": "coverage",
         "message": f'{result["line_coverage_percent"]:.2f}%',
-        "color": "brightgreen" if passed else "red",
+        "color": color,
     }
     args.badge.parent.mkdir(parents=True, exist_ok=True)
     args.badge.write_text(json.dumps(badge, sort_keys=True) + "\n", encoding="utf-8")

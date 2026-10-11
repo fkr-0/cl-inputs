@@ -143,6 +143,21 @@ class CoverageGateTest(unittest.TestCase):
         self.assertEqual("brightgreen", json.loads(badge.read_text())["color"])
         self.assertEqual("100.00%", json.loads(badge.read_text())["message"])
 
+    def test_cli_passing_below_ninety_emits_green(self):
+        (self.root / "src/terminal/tty.lisp").write_text("(defun z () t)\n")
+        self.lcov.write_text(
+            self.record("src/input/core.lisp", [(1, 1), (2, 1)])
+            + self.record("src/terminal/tty.lisp", [(1, 0)]))
+        badge = self.root / "badge.json"
+        passed = subprocess.run(
+            [sys.executable, str(Path(__file__).with_name("coverage_gate.py")),
+             str(self.lcov), "--root", str(self.root), "--min", "60",
+             "--out", str(self.root / "measure.json"), "--badge", str(badge)],
+            check=False, capture_output=True, text=True)
+        self.assertEqual(0, passed.returncode, passed.stdout + passed.stderr)
+        self.assertEqual("green", json.loads(badge.read_text())["color"])
+        self.assertEqual("66.67%", json.loads(badge.read_text())["message"])
+
 
 if __name__ == "__main__":
     unittest.main()
