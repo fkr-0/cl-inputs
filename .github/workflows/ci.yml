@@ -13,25 +13,25 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
-      - name: Install SBCL 2.6.0 toolchain
+      - name: Install pinned SBCL 2.6.2 and CLPM 0.4.1
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y sbcl build-essential git curl ca-certificates bzip2 tmux
-          git clone --depth 1 --branch sbcl-2.6.0 https://github.com/sbcl/sbcl.git /tmp/sbcl-2.6.0
-          (cd /tmp/sbcl-2.6.0 && sh make.sh && sudo sh install.sh)
-          command -v sbcl
+          sudo apt-get install -y curl bzip2 ca-certificates tmux
+          cd "$RUNNER_TEMP"
+          curl -fLsS --retry 3 -o sbcl.tar.bz2 \
+            https://downloads.sourceforge.net/project/sbcl/sbcl/2.6.2/sbcl-2.6.2-x86-64-linux-binary.tar.bz2
+          echo "1758d003f60fa166db014999a73cf9af02726ca7803ab9057dec32a92e2b6322  sbcl.tar.bz2" | sha256sum -c -
+          tar -xjf sbcl.tar.bz2
+          (cd sbcl-2.6.2-x86-64-linux && sudo sh install.sh)
+          curl -fLsS --retry 3 -o clpm.tar.gz \
+            https://files.clpm.dev/clpm/clpm-0.4.1-linux-amd64.tar.gz
+          echo "da39d9ecd1732d7062ea4c2a39ee8f43fa2213259431abd09b611c679db9e6a5f031267a9e5cd45cee2ac87f078cc7ae579dd53fe98657978c7dd37f97e87e90  clpm.tar.gz" | sha512sum -c -
+          tar -xzf clpm.tar.gz
+          (cd clpm-0.4.1-linux-amd64 && sudo sh install.sh)
           sbcl --version
-      - name: Install CLPM 0.4.1
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl --fail --location --retry 3 \
-            https://files.clpm.dev/clpm/clpm-0.4.1-linux-amd64.tar.gz -o /tmp/clpm.tar.gz
-          tar -xzf /tmp/clpm.tar.gz -C /tmp
-          (cd /tmp/clpm-0.4.1-linux-amd64 && sudo sh install.sh)
-          command -v clpm
+          clpm version
       - name: Configure SBCL for CI (ASDF + log4cl package unlocks)
         run: |
           cat > "$HOME/.sbclrc" <<'SBCLRC'
@@ -56,8 +56,8 @@ jobs:
         run: |
           CLPM_HOME=.cache/clpm clpm bundle exec --with-client sbcl -- \
             --noinform --non-interactive --load coverage.lisp
-      - name: Enforce measured line coverage >= 49%
-        run: python3 tests/coverage_gate.py coverage/coverage.info --min 49
+      - name: Enforce measured line coverage >= 52% (target 85%)
+        run: python3 tests/coverage_gate.py coverage/coverage.info --min 52
       - name: Upload HTML LCOV and source-denominator evidence
         if: always()
         uses: actions/upload-artifact@v4
