@@ -77,6 +77,40 @@
         (when condition
           (is (search (car case) (princ-to-string condition))))))))
 
+
+
+;;; An injected failure at the enable seam must still invoke cleanup, even
+;;; though the protected body never ran. This covers the device API macro
+;;; independently of concrete terminal backends.
+(defclass failing-raw-test-device ()
+  ((disable-count :initform 0 :accessor failing-raw-disable-count)))
+
+(defmethod cl-inputs.device.api:enable-raw-char-mode
+    ((dev failing-raw-test-device) &key &allow-other-keys)
+  (declare (ignore dev))
+  (error "Injected failure during raw-mode activation"))
+
+(defmethod cl-inputs.device.api:disable-raw-char-mode
+    ((dev failing-raw-test-device))
+  (incf (failing-raw-disable-count dev)))
+
+(test with-raw-char-mode-cleans-up-even-when-enable-fails
+  (let ((dev (make-instance 'failing-raw-test-device))
+        (body-ran nil))
+    (signals simple-error
+      (cl-inputs.device.api:with-raw-char-mode (dev)
+        (setf body-ran t)))
+    (is (null body-ran))
+    (is (= 1 (failing-raw-disable-count dev)))))
+
+(test raw-mode-error-condition-preserves-device-and-message
+  (let* ((dev (list :test-device))
+         (condition (make-condition 'cl-inputs.device.api:raw-mode-error
+                                    :device dev :message "raw mode failed")))
+    (is (typep condition 'cl-inputs.device.api:device-error))
+    (is (eq dev (cl-inputs.device.api::device-error/device condition)))
+    (is (search "raw mode failed" (princ-to-string condition)))))
+
 (test lockable-recursion-and-unwind-cleanup
   "Nested ownership and exceptional unwind release the underlying lock once."
   (let ((object (make-instance 'cl-inputs.device.api:lockable)))
