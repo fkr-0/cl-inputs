@@ -1,11 +1,127 @@
 {
-  "covered_lines": 2214,
+  "covered_lines": 2647,
   "excluded_files": [
     "src/input/events-adapter.lisp",
     "src/input/package.lisp"
   ],
-  "instrumented_lines": 4182,
-  "line_coverage_percent": 52.94,
+  "instrumented_lines": 4242,
+  "line_coverage_percent": 62.4,
+  "owned_source_inventory": {
+    "src/input/adapters.lisp": {
+      "covered": 36,
+      "instrumented": 46,
+      "reason": null,
+      "status": "measured"
+    },
+    "src/input/api.lisp": {
+      "covered": 49,
+      "instrumented": 100,
+      "reason": null,
+      "status": "measured"
+    },
+    "src/input/decoder.lisp": {
+      "covered": 202,
+      "instrumented": 240,
+      "reason": null,
+      "status": "measured"
+    },
+    "src/input/device/device-api.lisp": {
+      "covered": 160,
+      "instrumented": 263,
+      "reason": null,
+      "status": "measured"
+    },
+    "src/input/device/faketerm.lisp": {
+      "covered": 211,
+      "instrumented": 311,
+      "reason": null,
+      "status": "measured"
+    },
+    "src/input/device/tty.lisp": {
+      "covered": 306,
+      "instrumented": 437,
+      "reason": null,
+      "status": "measured"
+    },
+    "src/input/device/urxvt.lisp": {
+      "covered": 244,
+      "instrumented": 457,
+      "reason": null,
+      "status": "measured"
+    },
+    "src/input/escape.lisp": {
+      "covered": 12,
+      "instrumented": 19,
+      "reason": null,
+      "status": "measured"
+    },
+    "src/input/events-adapter.lisp": {
+      "covered": 0,
+      "instrumented": 0,
+      "reason": "optional cl-events adapter not loaded by core suite",
+      "status": "unmeasured"
+    },
+    "src/input/keymap.lisp": {
+      "covered": 26,
+      "instrumented": 64,
+      "reason": null,
+      "status": "measured"
+    },
+    "src/input/loop.lisp": {
+      "covered": 430,
+      "instrumented": 625,
+      "reason": null,
+      "status": "measured"
+    },
+    "src/input/package.lisp": {
+      "covered": 0,
+      "instrumented": 0,
+      "reason": "package declarations, no instrumentable runtime body",
+      "status": "unmeasured"
+    },
+    "src/input/protocol.lisp": {
+      "covered": 444,
+      "instrumented": 606,
+      "reason": null,
+      "status": "measured"
+    },
+    "src/input/routing.lisp": {
+      "covered": 181,
+      "instrumented": 235,
+      "reason": null,
+      "status": "measured"
+    },
+    "src/input/sink.lisp": {
+      "covered": 27,
+      "instrumented": 44,
+      "reason": null,
+      "status": "measured"
+    },
+    "src/input/tokens.lisp": {
+      "covered": 14,
+      "instrumented": 28,
+      "reason": null,
+      "status": "measured"
+    },
+    "src/input/util.lisp": {
+      "covered": 44,
+      "instrumented": 57,
+      "reason": null,
+      "status": "measured"
+    },
+    "src/terminal/ansii.lisp": {
+      "covered": 209,
+      "instrumented": 565,
+      "reason": null,
+      "status": "measured"
+    },
+    "src/terminal/api.lisp": {
+      "covered": 52,
+      "instrumented": 145,
+      "reason": null,
+      "status": "measured"
+    }
+  },
   "per_file": {
     "src/input/adapters.lisp": {
       "covered": 36,
@@ -20,7 +136,7 @@
       "instrumented": 240
     },
     "src/input/device/device-api.lisp": {
-      "covered": 148,
+      "covered": 160,
       "instrumented": 263
     },
     "src/input/device/faketerm.lisp": {
@@ -28,11 +144,11 @@
       "instrumented": 311
     },
     "src/input/device/tty.lisp": {
-      "covered": 54,
-      "instrumented": 414
+      "covered": 306,
+      "instrumented": 437
     },
     "src/input/device/urxvt.lisp": {
-      "covered": 115,
+      "covered": 244,
       "instrumented": 457
     },
     "src/input/escape.lisp": {
@@ -44,8 +160,8 @@
       "instrumented": 64
     },
     "src/input/loop.lisp": {
-      "covered": 410,
-      "instrumented": 588
+      "covered": 430,
+      "instrumented": 625
     },
     "src/input/protocol.lisp": {
       "covered": 444,
@@ -72,7 +188,7 @@
       "instrumented": 565
     },
     "src/terminal/api.lisp": {
-      "covered": 32,
+      "covered": 52,
       "instrumented": 145
     }
   }
