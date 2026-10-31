@@ -36,6 +36,17 @@ class CoverageGateTest(unittest.TestCase):
         self.assertEqual(
             ["src/input/events-adapter.lisp", "src/input/package.lisp"],
             outcome["excluded_files"])
+        self.assertEqual(3, len(outcome["owned_source_inventory"]))
+        self.assertEqual(
+            {"covered": 0, "instrumented": 0, "status": "unmeasured",
+             "reason": "optional cl-events adapter not loaded by core suite"},
+            outcome["owned_source_inventory"]["src/input/events-adapter.lisp"])
+        self.assertEqual(
+            "unmeasured",
+            outcome["owned_source_inventory"]["src/input/package.lisp"]["status"])
+        self.assertEqual(
+            "measured",
+            outcome["owned_source_inventory"]["src/input/core.lisp"]["status"])
 
     def test_urxvt_is_owned_and_missing_urxvt_fails_closed(self):
         source = "src/input/device/urxvt.lisp"

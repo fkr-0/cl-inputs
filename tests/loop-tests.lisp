@@ -53,6 +53,14 @@
     (is (= 0 (faketerm-device-raw-depth device)))
     (is (= 1 (faketerm-device-close-count device)))))
 
+(test resize-monitoring-rejects-fake-device-and-releases-owned-lifecycle
+  "A synthetic terminal must not impersonate kernel-backed TTY resize events."
+  (let ((device (make-device :faketerm)))
+    (signals error (make-input-source :device device :monitor-resize-p t))
+    (is-true (faketerm-device-closed-p device))
+    (is (= 0 (faketerm-device-raw-depth device)))
+    (is (= 1 (faketerm-device-close-count device)))))
+
 (test source-idempotent-cancel
   (let* ((device (make-device :faketerm))
          (source (make-input-source :device device)))

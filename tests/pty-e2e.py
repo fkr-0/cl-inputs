@@ -10,7 +10,9 @@ Usage (from repo root): python3 tests/pty-e2e.py
 from __future__ import annotations
 
 import errno
+import fcntl
 import os
+import struct
 from pathlib import Path
 import pty
 import select
@@ -37,6 +39,8 @@ def run() -> None:
     child: subprocess.Popen[bytes] | None = None
     try:
         original = termios.tcgetattr(slave)
+        # openpty() can report 0x0 until a window size is explicitly set.
+        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
         env = os.environ.copy()
         env["CL_INPUTS_PTY_SLAVE"] = os.ttyname(slave)
         env.setdefault("TERM", "xterm-256color")
@@ -108,6 +112,12 @@ def run() -> None:
                         os.write(master, b"k\x1b[6;13R")
                     elif stage == "READY malformed":
                         os.write(master, b"\x1b[12;Rq")
+                    elif stage == "READY resize":
+                        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 37, 113, 0, 0))
+                        os.write(master, b"z")
+                    elif stage == "READY resize again":
+                        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 29, 97, 0, 0))
+                        os.write(master, b"x")
                     elif stage == "READY close":
                         pass
                     elif stage == "RESTORED source":
@@ -142,8 +152,8 @@ def run() -> None:
                 break
             terminal_output.extend(data)
         tail = bytes(transcript).decode("utf-8", errors="replace")[-6000:]
-        require(status == 0, f"Child exited {status}:\n{tail}")
-        require(stages == ["READY input", "READY reply", "READY malformed", "READY close", "RESTORED source", "DONE"],
+        require(status == 0, f"Child exited {status}:\n{bytes(transcript).decode('utf-8', errors='replace')[:3000]}\n...\n{tail}")
+        require(stages == ["READY input", "READY reply", "READY malformed", "READY resize", "READY resize again", "READY close", "RESTORED source", "DONE"],
                 f"PTY handshake incomplete or out of order: {stages}\n{tail}")
         observed = bytes(terminal_output)
         for expected in (

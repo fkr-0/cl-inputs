@@ -25,7 +25,8 @@
        (src nil))
   (unwind-protect
        (progn
-         (setf src (cl-inputs.loop:make-input-source :device dev))
+         (setf src (cl-inputs.loop:make-input-source :device dev
+                                                   :monitor-resize-p t))
          (let* ((fd (cl-inputs.device.api:device-fd dev))
                 (termios (sb-posix:tcgetattr fd))
                 (flags (sb-posix:termios-lflag termios)))
@@ -100,11 +101,34 @@
                              (eq :unknown-sequence (getf data :category)))
                         "malformed CSI isolated from user input"))
 
-         ;; The size API is explicitly a cached-value API, not ioctl/DSR.
+         ;; The parent changes the kernel PTY winsize twice. Every read must
+         ;; discover fresh dimensions without consuming a keyboard byte.
+         (%pty-announce "READY resize")
+         (let* ((token (cl-inputs.loop:next-token src :timeout 3d0))
+                (data (and token (cl-inputs.tokens:input-token-data token))))
+           (%pty-assert (and token
+                             (eq :resize (cl-inputs.tokens:input-token-kind token))
+                             (= 113 (getf data :width))
+                             (= 37 (getf data :height)))
+                        "first kernel resize token"))
+         (%pty-token src :key #\z)
          (multiple-value-bind (width height)
              (cl-inputs.terminal.api:get-terminal-size dev)
-           (%pty-assert (and (= width 80) (= height 24))
-                        "cached 80x24 dimensions"))
+           (%pty-assert (and (= width 113) (= height 37))
+                        "fresh ioctl PTY dimensions 113x37"))
+         (%pty-announce "READY resize again")
+         (let* ((token (cl-inputs.loop:next-token src :timeout 3d0))
+                (data (and token (cl-inputs.tokens:input-token-data token))))
+           (%pty-assert (and token
+                             (eq :resize (cl-inputs.tokens:input-token-kind token))
+                             (= 97 (getf data :width))
+                             (= 29 (getf data :height)))
+                        "second kernel resize token"))
+         (%pty-token src :key #\x)
+         (multiple-value-bind (width height)
+             (cl-inputs.terminal.api:get-terminal-size dev)
+           (%pty-assert (and (= width 97) (= height 29))
+                        "fresh ioctl PTY dimensions 97x29"))
          (cl-inputs.api:set-terminal-modes dev
                                            :mouse :sgr :focus t :paste t)
          (cl-inputs.terminal.api:draw-text-at dev 1 2 "OK")

@@ -262,6 +262,9 @@ close/cancel cannot leave a read permanently stranded."
   response-router
   (pending-tokens nil :type list)
   pending-terminal-outcome
+  (monitor-resize-p nil :type boolean)
+  resize-width
+  resize-height
   (clock #'%monotonic-seconds :type function)
   (state :opening :type keyword)
   terminal-outcome
@@ -356,7 +359,8 @@ close/cancel cannot leave a read permanently stranded."
 
 (defun make-input-source (&key device decoder
                                (clock #'%monotonic-seconds)
-                               (owns-device-p t))
+                               (owns-device-p t)
+                               (monitor-resize-p nil))
   "Create an explicit source lifecycle around DEVICE and DECODER.
 
 When OWNS-DEVICE-P is true (the default), this function opens DEVICE, enables
@@ -365,7 +369,9 @@ for restoring raw mode and closing the device exactly once. Partial-open or
 raw-mode failure is cleaned up before the original condition is re-signaled.
 When OWNS-DEVICE-P is false, the caller retains ownership and must keep DEVICE
 open, raw-configured, and nonblocking for the source lifetime; the source never
-changes or closes that borrowed device."
+changes or closes that borrowed device. MONITOR-RESIZE-P opts into ioctl-backed
+size sampling for an open Linux/SBCL TTY. Other device kinds cannot claim
+kernel resize evidence through this contract."
   (check-type clock function)
   (let* ((device (or device (cl-inputs.device.api:make-device :tty)))
          (decoder (or decoder (cl-inputs.decoder:make-decoder :clock clock)))
@@ -375,7 +381,8 @@ changes or closes that borrowed device."
                :buf (make-array 4096 :element-type '(unsigned-byte 8))
                :response-router (make-response-router :clock clock)
                :clock clock
-               :owns-device-p owns-device-p)))
+               :owns-device-p owns-device-p
+               :monitor-resize-p (not (null monitor-resize-p)))))
     (handler-case
       (progn
         (when owns-device-p
@@ -385,6 +392,13 @@ changes or closes that borrowed device."
           (cl-inputs.device.api:enable-raw-char-mode
            device :vmin 1 :vtime 0 :canonical nil :echo nil :isig t)
           (setf (input-source-raw-enabled-p src) t))
+        (when monitor-resize-p
+          (unless (typep device 'cl-inputs.device.tty:tty-device)
+            (error "Resize monitoring requires a real tty-device"))
+          (multiple-value-bind (width height)
+              (cl-inputs.terminal.api:get-terminal-size device)
+            (setf (input-source-resize-width src) width
+                  (input-source-resize-height src) height)))
         (setf (input-source-state src) :open
               *default-input-source* src)
         src)
@@ -450,9 +464,26 @@ changes or closes that borrowed device."
       (or (%syscall-outcome condition)
           (error condition)))))
 
+(defun %observe-source-resize (src now)
+  "Generate one resize token per observed kernel dimension change.
+
+Only explicitly opted-in sources invoke this; the caller holds READ-LOCK.
+The fresh TTY ioctl is separate from terminal query/reply and key streams."
+  (when (input-source-monitor-resize-p src)
+    (multiple-value-bind (width height)
+        (cl-inputs.terminal.api:get-terminal-size (input-source-dev src))
+      (unless (and (= width (input-source-resize-width src))
+                   (= height (input-source-resize-height src)))
+        (setf (input-source-resize-width src) width
+              (input-source-resize-height src) height)
+        (%enqueue-source-user-token
+         src (cl-inputs.tokens:make-token
+              :resize (list :width width :height height) now))))))
+
 (defun %next-token-active (src timeout &key (return-user-input-p t) stop-predicate)
   (when (and stop-predicate (funcall stop-predicate))
     (return-from %next-token-active (values nil nil :stopped)))
+  (%observe-source-resize src (funcall (input-source-clock src)))
   (when (and return-user-input-p (input-source-pending-tokens src))
     (return-from %next-token-active
       (values (%take-source-user-token src) nil nil)))
@@ -479,6 +510,9 @@ changes or closes that borrowed device."
                (response-router-next-deadline
                 (input-source-response-router src))))
         (expire-response-correlations (input-source-response-router src) :now now)
+        (%observe-source-resize src now)
+        (when (and return-user-input-p (input-source-pending-tokens src))
+          (return (values (%take-source-user-token src) nil nil)))
         (when (and stop-predicate (funcall stop-predicate))
           (return (values nil nil :stopped)))
         (when (and decoder-deadline (>= now decoder-deadline))
@@ -500,6 +534,11 @@ changes or closes that borrowed device."
                                  +cancellation-poll-seconds+))
                (wait-outcome (%device-wait-outcome dev (* wait-seconds 1000d0))))
           (setf first-attempt-p nil)
+          ;; A resize may arrive during the bounded readiness wait. Inspect
+          ;; the kernel before consuming the key that woke this iteration.
+          (%observe-source-resize src (funcall clock))
+          (when (and return-user-input-p (input-source-pending-tokens src))
+            (return (values (%take-source-user-token src) nil nil)))
           (cond
             ((eq wait-outcome :interrupted)
              nil)

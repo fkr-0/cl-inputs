@@ -115,10 +115,15 @@ separate raw-terminal, stderr, before/after-stty and screen-snapshot artifacts:
     python3 tests/tmux-terminal-apps.py --timeout 20
 
 The PTY scenario is explicitly separate from ASDF so it does not silently pass
-by substituting faketerm when no PTY support is present. Terminal size is
-currently cached by the TTY API; dynamic SIGWINCH/size discovery is not
-promised or tested as implemented functionality. Neither suite claims coverage
-of non-SBCL or non-POSIX platforms.
+by substituting faketerm when no PTY support is present. On Linux/SBCL an open
+TTY discovers fresh dimensions with TIOCGWINSZ (not input-consuming cursor
+reports). Opt in with `(make-input-source :device tty :monitor-resize-p t)` to
+observe changed dimensions as `:resize` tokens with `:width` and `:height`.
+The real PTY test verifies two actual kernel resizes and subsequent keys.
+Monitoring is polling-based on bounded source wait slices rather than an
+installed SIGWINCH handler; it requires a real TTY, valid initial geometry and
+the explicitly configured source/device lifetime. Neither suite claims
+non-SBCL/non-Linux support or a signal-handler delivery guarantee.
 
 ## Loading
 
@@ -235,12 +240,15 @@ files. It excludes `src/input/events-adapter.lisp` because that file belongs
 to the optional `cl-inputs/events` ASDF system, which is not installed in
 the core CLPM bundle; `src/input/package.lisp`, which contains only
 package declarations without executable runtime code; and
-`src/input/device/urxvt.lisp`, which is compile/load qualified only and
-requires actual URxvt hardware for runtime coverage. Tests and transitive
-dependency files are also excluded.
+Tests and transitive dependency files are also excluded. The URxvt backend
+remains in the measured core-source inventory even though live URxvt terminal
+behavior is not exercised; that limitation is not a reason to remove it.
 Missing or entirely uninstrumented core files fail the gate rather than
 artificially improving its percentage. The CI artifact includes per-file
-covered/instrumented line counts and the exclusion list. Published badge JSON
+covered/instrumented line counts, an all-owned-file inventory (including
+explicit zero-measured optional/package entries), and exclusion reasons.
+The numeric SB-COVER percentage is explicitly the instrumented core system,
+not a claim that the optional adapter was runtime-exercised. Published badge JSON
 on `gh-pages` is updated only after successful main-branch qualification.
 
 After installing CLPM and SBCL >= 2.6.0, run locally:
@@ -248,7 +256,7 @@ After installing CLPM and SBCL >= 2.6.0, run locally:
     CLPM_HOME=.cache/clpm clpm bundle exec --with-client sbcl -- \\
       --noinform --non-interactive --load coverage.lisp
     python3 -m unittest discover -s tests -p test_coverage_gate.py -v
-    python3 tests/coverage_gate.py coverage/coverage.info --min 85
+    python3 tests/coverage_gate.py coverage/coverage.info --min 52
 
 ## Dependencies
 

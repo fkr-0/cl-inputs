@@ -744,11 +744,36 @@ input source and could steal user input. Call CL-INPUTS.LOOP:SEND-TERMINAL-QUERY
 with :CURSOR-POSITION when an authoritative terminal CPR is required."
   (values (%tty-cursor-row instance) (%tty-cursor-col instance)))
 
-(defmethod get-terminal-size ((instance tty-device))
-  "Return the device's cached width and height without consuming input bytes.
+#+(and sbcl linux)
+(sb-alien:define-alien-routine ("ioctl" %tty-winsize-ioctl) sb-alien:int
+  (fd sb-alien:int) (request sb-alien:unsigned-long)
+  (buffer (* sb-alien:unsigned-char)))
 
-Live terminal negotiation belongs to the input-source response router. This
-method deliberately avoids cursor-report tricks that compete with the source."
-  (values (%tty-width instance) (%tty-height instance)))
+(defmethod get-terminal-size ((instance tty-device))
+  "Read fresh terminal dimensions from this OPEN device without consuming input.
+
+On Linux/SBCL TIOCGWINSZ inspects the input descriptor; this never issues a
+terminal query or steals pending keyboard bytes. On failure signal rather than
+silently reporting the initial 80x24 cache as authoritative."
+  #+(and sbcl linux)
+  (let ((fd (device-fd instance))
+        (buffer (make-array 8 :element-type '(unsigned-byte 8)
+                            :initial-element 0)))
+    (unless fd (error "Cannot discover dimensions of unopened TTY"))
+    (sb-sys:with-pinned-objects (buffer)
+      (let ((rc (%tty-winsize-ioctl fd #x5413
+                                   (sb-alien:sap-alien
+                                    (sb-sys:vector-sap buffer)
+                                    (* sb-alien:unsigned-char)))))
+        (unless (zerop rc)
+          (error "TIOCGWINSZ failed for TTY descriptor ~D" fd))))
+    (let ((height (+ (aref buffer 0) (ash (aref buffer 1) 8)))
+          (width (+ (aref buffer 2) (ash (aref buffer 3) 8))))
+      (unless (and (plusp width) (plusp height))
+        (error "TIOCGWINSZ returned invalid dimensions ~Dx~D" width height))
+      (setf (%tty-width instance) width (%tty-height instance) height)
+      (values width height)))
+  #-(and sbcl linux)
+  (error "Fresh TTY size discovery is only implemented on Linux/SBCL"))
 
 

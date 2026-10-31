@@ -19,11 +19,11 @@ EXCLUDED = {
 
 def measure(lcov: Path, root: Path) -> dict:
     root = root.resolve()
-    expected = {
+    owned = {
         p.relative_to(root).as_posix()
         for p in (root / "src").rglob("*.lisp")
-        if p.relative_to(root).as_posix() not in EXCLUDED
     }
+    expected = owned - EXCLUDED
     if not expected:
         raise ValueError("No owned source files found")
     # Reject impossible line numbers rather than accepting fabricated
@@ -84,7 +84,22 @@ def measure(lcov: Path, root: Path) -> dict:
                    "instrumented": len(lines)}
             for name, lines in sorted(hits.items())
         },
-        "excluded_files": sorted(EXCLUDED),
+        "excluded_files": sorted(owned & EXCLUDED),
+        # Account for every owned file, including optional/non-executable
+        # sources without LCOV DA lines. These are explicitly UNMEASURED,
+        # never silently counted as covered or removed from the inventory.
+        "owned_source_inventory": {
+            name: {
+                "covered": sum(c > 0 for c in hits.get(name, {}).values()),
+                "instrumented": len(hits.get(name, {})),
+                "status": "unmeasured" if name in EXCLUDED else "measured",
+                "reason": ("optional cl-events adapter not loaded by core suite"
+                           if name == "src/input/events-adapter.lisp" else
+                           "package declarations, no instrumentable runtime body"
+                           if name == "src/input/package.lisp" else None),
+            }
+            for name in sorted(owned)
+        },
     }
 
 
